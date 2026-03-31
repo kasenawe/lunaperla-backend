@@ -20,6 +20,35 @@ app.post("/api/create-payment", async (req, res) => {
   try {
     const { product, customerData } = req.body;
     console.log("FRONTEND_URL:", process.env.FRONTEND_URL);
+    console.log("BACKEND_URL:", process.env.BACKEND_URL);
+    console.log(
+      "MERCADO_PAGO_ACCESS_TOKEN exists:",
+      !!process.env.MERCADO_PAGO_ACCESS_TOKEN,
+    );
+
+    // Validar URLs antes de enviar a Mercado Pago
+    const successUrl = `${process.env.FRONTEND_URL}/success`;
+    const failureUrl = `${process.env.FRONTEND_URL}/failure`;
+    const pendingUrl = `${process.env.FRONTEND_URL}/pending`;
+    const notificationUrl = `${process.env.BACKEND_URL}/api/webhook`;
+
+    console.log("Constructed URLs:", {
+      successUrl,
+      failureUrl,
+      pendingUrl,
+      notificationUrl,
+    });
+
+    // Validar que las URLs sean válidas
+    if (!process.env.FRONTEND_URL || !process.env.BACKEND_URL) {
+      throw new Error(
+        "FRONTEND_URL y BACKEND_URL deben estar definidas en las variables de entorno",
+      );
+    }
+
+    if (!successUrl.startsWith("http")) {
+      throw new Error(`URL de success inválida: ${successUrl}`);
+    }
 
     const preference = new Preference(client);
     const result = await preference.create({
@@ -41,12 +70,12 @@ app.post("/api/create-payment", async (req, res) => {
           },
         },
         back_urls: {
-          success: `${process.env.FRONTEND_URL}/success`,
-          failure: `${process.env.FRONTEND_URL}/failure`,
-          pending: `${process.env.FRONTEND_URL}/pending`,
+          success: successUrl,
+          failure: failureUrl,
+          pending: pendingUrl,
         },
-        auto_return: "approved",
-        notification_url: `${process.env.BACKEND_URL}/api/webhook`,
+        // auto_return: "approved", // Removido temporalmente para debugging
+        notification_url: notificationUrl,
       },
     });
 
