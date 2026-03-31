@@ -45,7 +45,7 @@ app.post("/api/create-payment", async (req, res) => {
           failure: `${process.env.FRONTEND_URL}/failure`,
           pending: `${process.env.FRONTEND_URL}/pending`,
         },
-        // auto_return: "approved", // Temporalmente removido para probar
+        auto_return: "approved",
         notification_url: `${process.env.BACKEND_URL}/api/webhook`,
       },
     });
