@@ -23,29 +23,31 @@ app.post("/api/create-payment", async (req, res) => {
 
     const preference = new Preference(client);
     const result = await preference.create({
-      items: [
-        {
-          title: product.name,
-          description: product.description,
-          quantity: 1,
-          currency_id: "UYU",
-          unit_price: product.price,
+      body: {
+        items: [
+          {
+            title: product.name,
+            description: product.description,
+            quantity: 1,
+            currency_id: "UYU", // Moneda uruguaya
+            unit_price: product.price,
+          },
+        ],
+        payer: {
+          name: customerData?.name || "",
+          email: customerData?.email || "",
+          phone: {
+            number: customerData?.phone || "",
+          },
         },
-      ],
-      payer: {
-        name: customerData?.name || "",
-        email: customerData?.email || "",
-        phone: {
-          number: customerData?.phone || "",
+        back_urls: {
+          success: `${process.env.FRONTEND_URL}/success`,
+          failure: `${process.env.FRONTEND_URL}/failure`,
+          pending: `${process.env.FRONTEND_URL}/pending`,
         },
+        // auto_return: "approved", // Temporalmente removido para probar
+        notification_url: `${process.env.BACKEND_URL}/api/webhook`,
       },
-      back_urls: {
-        success: `${process.env.FRONTEND_URL?.trim()}/success`,
-        failure: `${process.env.FRONTEND_URL?.trim()}/failure`,
-        pending: `${process.env.FRONTEND_URL?.trim()}/pending`,
-      },
-      auto_return: "approved",
-      notification_url: `${process.env.BACKEND_URL}/api/webhook`,
     });
 
     res.json({
