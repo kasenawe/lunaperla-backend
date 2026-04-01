@@ -26,3 +26,6 @@ ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 -- Política para permitir todas las operaciones (ajusta según necesites)
 CREATE POLICY "Allow all operations for authenticated users" ON orders
 FOR ALL USING (true);
+
+-- Agregar columna preference_id
+ALTER TABLE orders ADD COLUMN preference_id TEXT;

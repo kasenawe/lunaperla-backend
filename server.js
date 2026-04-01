@@ -34,7 +34,8 @@ async function saveOrder(orderData) {
       .from("orders")
       .insert([
         {
-          id: orderData.preferenceId,
+          id: orderData.orderId, // Usamos el mismo ID que en Mercado Pago para tracking
+          preference_id: orderData.preferenceId,
           product: orderData.product.name,
           price: orderData.amount,
           status: "pending",
@@ -166,6 +167,8 @@ app.post("/api/create-payment", async (req, res) => {
       throw new Error(`URL de success inválida: ${successUrl}`);
     }
 
+    const orderId = "LP-" + Date.now();
+
     const preference = new Preference(client);
     const result = await preference.create({
       body: {
@@ -175,9 +178,10 @@ app.post("/api/create-payment", async (req, res) => {
             description: product.description,
             quantity: 1,
             currency_id: "USD", // Moneda uruguaya
-            unit_price: product.price,
+            unit_price: Number(product.price),
           },
         ],
+        external_reference: orderId, // Usamos nuestro propio ID de orden para tracking
         payer: {
           name: customerData?.name || "",
           email: customerData?.email || "",
@@ -198,10 +202,12 @@ app.post("/api/create-payment", async (req, res) => {
     // Guardar la orden en Supabase
     const orderData = {
       preferenceId: result.id,
+      orderId: orderId,
       product,
       customerData,
       amount: product.price,
-      currency: "UYU",
+      currency: "USD",
+      amount: product.price,
       initPoint: result.init_point,
     };
 
@@ -222,42 +228,37 @@ app.post("/api/create-payment", async (req, res) => {
 // Webhook para confirmación de pagos
 app.post("/api/webhook", async (req, res) => {
   try {
-    const payment = req.body;
+    const body = req.body;
 
-    if (payment.type === "payment") {
-      const paymentId = payment.data.id;
-      const status = payment.data.status; // approved, pending, rejected, etc.
-      const externalReference = payment.data.external_reference; // Este es nuestro orderId
+    if (body.type === "payment") {
+      const paymentId = body.data.id;
 
-      console.log("💰 Pago recibido en webhook:", {
+      // 🔥 CONSULTAR a Mercado Pago (obligatorio)
+      const response = await fetch(
+        `https://api.mercadopago.com/v1/payments/${paymentId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.MERCADO_PAGO_ACCESS_TOKEN}`,
+          },
+        },
+      );
+
+      const paymentData = await response.json();
+
+      const status = paymentData.status;
+      const externalReference = paymentData.external_reference;
+
+      console.log("💰 Pago confirmado:", {
         paymentId,
         status,
         externalReference,
-        amount: payment.data.transaction_amount,
       });
 
-      // Actualizar el status de la orden usando el external_reference
       if (externalReference) {
-        try {
-          await updateOrderStatus(externalReference, status, payment.data);
-          console.log(
-            `✅ Orden ${externalReference} actualizada a status: ${status}`,
-          );
-        } catch (updateError) {
-          console.error(
-            `❌ Error actualizando orden ${externalReference}:`,
-            updateError,
-          );
-        }
+        await updateOrderStatus(externalReference, status, paymentData);
       } else {
-        console.warn("⚠️ Webhook recibido sin external_reference");
+        console.warn("⚠️ No hay external_reference");
       }
-
-      // Log completo para debugging
-      console.log(
-        "📋 Datos completos del pago:",
-        JSON.stringify(payment, null, 2),
-      );
     }
 
     res.sendStatus(200);
