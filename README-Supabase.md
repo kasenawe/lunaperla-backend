@@ -1,4 +1,4 @@
-# Backend Luna Perla - Integración Mercado Pago
+# Backend Luna Gold - Integración Mercado Pago
 
 ## 🚀 Configuración con Supabase
 
