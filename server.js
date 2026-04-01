@@ -190,7 +190,7 @@ app.post("/api/create-payment", async (req, res) => {
           failure: failureUrl,
           pending: pendingUrl,
         },
-        // auto_return: "approved", // Removido temporalmente para debugging
+        auto_return: "approved", // Removido temporalmente para debugging
         notification_url: notificationUrl,
       },
     });
