@@ -192,7 +192,6 @@ app.post("/api/create-payment", async (req, res) => {
         },
         // auto_return: "approved", // Removido temporalmente para debugging
         notification_url: notificationUrl,
-        external_reference: result.id, // Importante: ID de la orden para el webhook
       },
     });
 
@@ -223,44 +222,26 @@ app.post("/api/create-payment", async (req, res) => {
 // Webhook para confirmación de pagos
 app.post("/api/webhook", async (req, res) => {
   try {
-    console.log(
-      "🔥 WEBHOOK RECIBIDO - Headers:",
-      JSON.stringify(req.headers, null, 2),
-    );
-    console.log(
-      "🔥 WEBHOOK RECIBIDO - Body:",
-      JSON.stringify(req.body, null, 2),
-    );
-
     const payment = req.body;
 
     if (payment.type === "payment") {
       const paymentId = payment.data.id;
-      const status = payment.data.status;
-      const externalReference = payment.data.external_reference;
+      const status = payment.data.status; // approved, pending, rejected, etc.
+      const externalReference = payment.data.external_reference; // Este es nuestro orderId
 
-      console.log("💰 WEBHOOK - Procesando pago:", {
+      console.log("💰 Pago recibido en webhook:", {
         paymentId,
         status,
         externalReference,
-        hasExternalRef: !!externalReference,
         amount: payment.data.transaction_amount,
       });
 
       // Actualizar el status de la orden usando el external_reference
       if (externalReference) {
         try {
+          await updateOrderStatus(externalReference, status, payment.data);
           console.log(
-            `🔄 Intentando actualizar orden ${externalReference} a status ${status}`,
-          );
-          const updatedOrder = await updateOrderStatus(
-            externalReference,
-            status,
-            payment.data,
-          );
-          console.log(
-            `✅ Orden ${externalReference} actualizada exitosamente:`,
-            updatedOrder,
+            `✅ Orden ${externalReference} actualizada a status: ${status}`,
           );
         } catch (updateError) {
           console.error(
@@ -269,54 +250,20 @@ app.post("/api/webhook", async (req, res) => {
           );
         }
       } else {
-        console.error(
-          "❌ Webhook recibido SIN external_reference - No se puede actualizar orden",
-        );
-        console.error("Datos del pago:", JSON.stringify(payment, null, 2));
+        console.warn("⚠️ Webhook recibido sin external_reference");
       }
-    } else {
-      console.log("ℹ️ Webhook recibido con type diferente:", payment.type);
+
+      // Log completo para debugging
+      console.log(
+        "📋 Datos completos del pago:",
+        JSON.stringify(payment, null, 2),
+      );
     }
 
     res.sendStatus(200);
   } catch (error) {
     console.error("❌ Error en webhook:", error);
     res.sendStatus(500);
-  }
-});
-
-// Endpoint de TEST para webhook (para debugging)
-app.post("/api/webhook-test", async (req, res) => {
-  try {
-    console.log("🧪 WEBHOOK TEST - Body:", JSON.stringify(req.body, null, 2));
-
-    // Simular un webhook de Mercado Pago
-    const testWebhook = {
-      type: "payment",
-      data: {
-        id: "test_payment_123",
-        status: "approved",
-        external_reference: req.body.orderId || "test-order-id",
-        transaction_amount: 299,
-      },
-    };
-
-    console.log(
-      "🧪 Enviando webhook de prueba:",
-      JSON.stringify(testWebhook, null, 2),
-    );
-
-    // Enviar el webhook a nuestro propio endpoint
-    const axios = require("axios");
-    await axios.post(
-      `${process.env.BACKEND_URL || "http://localhost:3001"}/api/webhook`,
-      testWebhook,
-    );
-
-    res.json({ message: "Webhook de prueba enviado", testData: testWebhook });
-  } catch (error) {
-    console.error("❌ Error en webhook test:", error);
-    res.status(500).json({ error: error.message });
   }
 });
 
@@ -363,28 +310,6 @@ app.get("/api/dashboard/stats", async (req, res) => {
     console.error("Error obteniendo estadísticas:", error);
     res.status(500).json({ error: "Error interno del servidor" });
   }
-});
-
-// Endpoint para verificar configuración
-app.get("/api/config-check", (req, res) => {
-  const config = {
-    supabase: {
-      url: !!process.env.SUPABASE_URL,
-      key: !!process.env.SUPABASE_ANON_KEY,
-    },
-    mercadopago: {
-      token: !!process.env.MERCADO_PAGO_ACCESS_TOKEN,
-      tokenType: process.env.MERCADO_PAGO_ACCESS_TOKEN?.split("-")[0],
-    },
-    urls: {
-      frontend: process.env.FRONTEND_URL,
-      backend: process.env.BACKEND_URL,
-      notification: `${process.env.BACKEND_URL}/api/webhook`,
-    },
-    timestamp: new Date().toISOString(),
-  };
-
-  res.json(config);
 });
 
 // Dashboard HTML simple

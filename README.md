@@ -14,14 +14,12 @@ lunaperla-backend/   # Backend (Node.js + Express)
 ## Configuración
 
 1. **Instalar dependencias:**
-
    ```bash
    npm install
    ```
 
 2. **Configurar variables de entorno:**
    Copiar `.env` y completar:
-
    ```bash
    # Obtener de https://www.mercadopago.com.uy/developers
    MERCADO_PAGO_ACCESS_TOKEN=tu_access_token_aqui
@@ -49,11 +47,9 @@ npm start
 ## Endpoints
 
 ### POST /api/create-payment
-
 Crea una preferencia de pago en Mercado Pago.
 
 **Request Body:**
-
 ```json
 {
   "product": {
@@ -70,7 +66,6 @@ Crea una preferencia de pago en Mercado Pago.
 ```
 
 **Response:**
-
 ```json
 {
   "id": "preferencia_id",
@@ -79,17 +74,14 @@ Crea una preferencia de pago en Mercado Pago.
 ```
 
 ### POST /api/webhook
-
 Webhook para confirmaciones de pago de Mercado Pago.
 
 ### GET /api/health
-
 Health check del servidor.
 
 ## Despliegue
 
 Para producción necesitarás:
-
 - Configurar webhook URL en Mercado Pago
 - Usar HTTPS
 - Configurar variables de entorno de producción
