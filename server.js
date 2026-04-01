@@ -256,7 +256,7 @@ async function sendConfirmationEmail(orderData) {
 </html>`;
 
     const { data, error } = await resend.emails.send({
-      from: 'Luna Gold <noreply@lunagold.com>',
+      from: 'Luna Gold <onboarding@resend.dev>',
       to: [orderData.customer_email],
       subject: '✨ ¡Compra Confirmada! - Luna Gold',
       html: emailHtml,
@@ -667,11 +667,14 @@ app.post("/api/test-email", async (req, res) => {
       created_at: new Date().toISOString()
     };
 
+    console.log("🔍 Probando envío de email a:", testOrder.customer_email);
+    console.log("🔑 Resend configurado:", !!resend);
+
     await sendConfirmationEmail(testOrder);
     res.json({ success: true, message: "Email de prueba enviado" });
   } catch (error) {
-    console.error("Error en test email:", error);
-    res.status(500).json({ error: "Error enviando email de prueba" });
+    console.error("❌ Error en test email:", error);
+    res.status(500).json({ error: "Error enviando email de prueba", details: error.message });
   }
 });
 
