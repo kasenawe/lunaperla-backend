@@ -1,80 +1,84 @@
-# Backend - Luna Gold Creaciones
+# Backend Luna Gold - Mercado Pago + Supabase
 
-API backend para integración con Mercado Pago.
+API backend profesional con integración completa: pagos, persistencia de datos, dashboard administrativo y emails automáticos.
 
-## Estructura del Proyecto
-
-Este backend está separado del frontend y se encuentra al mismo nivel:
+## 🏗️ Estructura del Proyecto
 
 ```
 lunaperla/           # Frontend (React + Vite)
-lunaperla-backend/   # Backend (Node.js + Express)
+lunaperla-backend/   # Backend (Node.js + Express) ← Estás aquí
 ```
 
-## Configuración
+## 📋 Requisitos
+
+- Node.js v16+
+- npm o yarn
+- Cuentas en: Mercado Pago, Supabase, Resend (opcional)
+
+## ⚡ Inicio Rápido
 
 1. **Instalar dependencias:**
+
    ```bash
    npm install
    ```
 
-2. **Configurar variables de entorno:**
-   Copiar `.env` y completar:
-   ```bash
-   # Obtener de https://www.mercadopago.com.uy/developers
-   MERCADO_PAGO_ACCESS_TOKEN=tu_access_token_aqui
+2. **Crear archivo `.env`:**
 
-   # URLs de tu aplicación
+   ```bash
+   # Mercado Pago (https://www.mercadopago.com.uy/developers)
+   MERCADO_PAGO_ACCESS_TOKEN=APP_USR-...
+
+   # URLs locales (desarrollo) o producción (HTTPS requerido)
    FRONTEND_URL=http://localhost:3000
    BACKEND_URL=http://localhost:3001
 
-   # Base de datos Supabase (opcional para persistencia)
-   SUPABASE_URL=tu_supabase_url
-   SUPABASE_ANON_KEY=tu_supabase_anon_key
+   # Supabase (https://supabase.com)
+   SUPABASE_URL=https://tu-proyecto.supabase.co
+   SUPABASE_ANON_KEY=tu-anon-key
 
-   # Email service Resend (para notificaciones automáticas)
-   RESEND_API_KEY=tu_resend_api_key
+   # Resend - Email automático (https://resend.com) - OPCIONAL
+   RESEND_API_KEY=re_...
+
+   # Puerto
+   PORT=3001
    ```
 
-3. **Configurar servicios externos:**
+3. **Ejecutar servidor:**
+   ```bash
+   npm run dev    # Desarrollo (con nodemon)
+   npm start      # Producción
+   ```
 
-   **Mercado Pago:**
-   - Ir a [Mercado Pago Developers](https://www.mercadopago.com.uy/developers)
-   - Crear aplicación
-   - Copiar Access Token de Producción
+## ⚙️ Configuración Detallada
 
-   **Supabase (opcional):**
-   - Crear proyecto en [Supabase](https://supabase.com)
-   - Ejecutar el script `supabase-schema.sql` en el SQL Editor
-   - Copiar URL y Anon Key del proyecto
+Ver **[SUPABASE.md](SUPABASE.md)** para configuración completa de base de datos.
 
-   **Resend (para emails automáticos):**
-   - Crear cuenta en [Resend](https://resend.com)
-   - Obtener API Key desde el dashboard
-   - Verificar dominio para envío profesional (recomendado)
+**Mercado Pago:**
 
-## Ejecutar
+- Dashboard: https://www.mercadopago.com.uy/developers
+- Copiar **Access Token** de Producción
 
-```bash
-# Desarrollo (con nodemon)
-npm run dev
+**Resend (Emails automáticos - opcional):**
 
-# Producción
-npm start
-```
+- Dashboard: https://resend.com
+- Crear API Key
+- Verificar dominio para emails profesionales
 
-## Endpoints
+## 🔌 API Endpoints
 
 ### POST /api/create-payment
-Crea una preferencia de pago en Mercado Pago.
 
-**Request Body:**
+Crear preferencia de pago en Mercado Pago y guardar orden en Supabase.
+
+**Body:**
+
 ```json
 {
   "product": {
     "name": "Canasta trenzada",
     "price": 299,
-    "description": "Caravanas tix bebe..."
+    "description": "Descripción del producto"
   },
   "customerData": {
     "name": "Juan Pérez",
@@ -84,80 +88,66 @@ Crea una preferencia de pago en Mercado Pago.
 }
 ```
 
-**Response:**
-```json
-{
-  "id": "preferencia_id",
-  "init_point": "https://www.mercadopago.com.uy/checkout/v1/redirect?pref_id=..."
-}
-```
+**Response:** `{id, init_point, orderId}`
 
 ### POST /api/webhook
-Webhook para confirmaciones de pago de Mercado Pago. Actualiza automáticamente el status de las órdenes y envía emails de confirmación.
 
-### GET /api/orders
-Obtiene todas las órdenes almacenadas (útil para debugging y dashboard).
+Webhook automático de Mercado Pago. Actualiza órdenes y envía emails de confirmación.
+
+### GET /api/products
+
+Obtener productos activos para mostrar en tienda.
 
 **Response:**
+
 ```json
 [
   {
-    "id": "LP-1234567890",
-    "product": "Anillo Luna Gold",
+    "id": "uuid",
+    "name": "Anillo Luna Gold",
     "price": 299.99,
-    "status": "approved",
-    "customer_name": "María García",
-    "customer_email": "maria@email.com",
-    "customer_phone": "099123456",
-    "created_at": "2024-01-15T10:30:00Z",
-    "updated_at": "2024-01-15T10:35:00Z"
+    "image_url": "...",
+    "description": "..."
   }
 ]
 ```
 
-### GET /api/dashboard
-Dashboard HTML con todas las órdenes y estadísticas.
+### GET /api/orders
+
+Todas las órdenes guardadas.
+
+### GET /api/orders/:orderId
+
+Orden específica.
+
+### GET /api/dashboard/stats
+
+Estadísticas para el dashboard (total, pendientes, aprobados, ingresos).
+
+### GET /dashboard
+
+Dashboard HTML administrativo completo con estadísticas en tiempo real.
 
 ### POST /api/test-email
-Endpoint de prueba para enviar emails de confirmación (solo desarrollo).
 
-**Request Body:**
-```json
-{
-  "email": "test@example.com"
-}
-```
+Probar envío de emails (desarrollo). Body: `{email: "test@example.com"}`
 
-### GET /api/health
-Health check del servidor.
+## 📧 Emails Automáticos (Resend)
 
-## Funcionalidades de Email Automático
+Cuando un pago es aprobado, se envía automáticamente un email profesional con:
 
-Cuando un pago es aprobado, el sistema envía automáticamente un email de confirmación profesional al cliente con:
+- ✨ Diseño premium con branding Luna Gold
+- 📦 Detalles completos del pedido (producto, precio, fecha, ID)
+- 📱 Información de contacto para soporte
+- 🎨 Template HTML personalizado
 
-- **Diseño Premium:** Template HTML con colores dorados y branding de Luna Gold
-- **Detalles Completos:** Información del producto, precio, fecha y datos del cliente
-- **Estilo Joyería:** Diseño elegante y sofisticado apropiado para productos premium
-- **Información de Contacto:** Datos para soporte post-venta
+**Uso:**
 
-### Configuración de Email
+1. Crear cuenta en https://resend.com
+2. Obtener API Key y completar `RESEND_API_KEY` en `.env`
+3. (Recomendado) Verificar dominio para emails profesionales
 
-1. **Crear cuenta en Resend:**
-   - Ve a [resend.com](https://resend.com) y crea una cuenta
-   - Obtén tu API Key desde el dashboard
-
-2. **Verificar Dominio (Recomendado):**
-   - Para envío profesional, verifica tu dominio (ej: lunaperla.com)
-   - Esto permite enviar emails desde `noreply@lunaperla.com`
-
-3. **Configurar API Key:**
-   ```bash
-   RESEND_API_KEY=re_xxxxxxxxxxxxxxxxxxxxxxxxx
-   ```
-
-### Testing de Emails
-
-Usa el endpoint `/api/test-email` para probar el envío:
+**Prueba:**
 
 ```bash
 curl -X POST http://localhost:3001/api/test-email \
@@ -165,10 +155,52 @@ curl -X POST http://localhost:3001/api/test-email \
   -d '{"email":"tu-email@ejemplo.com"}'
 ```
 
-## Despliegue
+## 📊 Dashboard Administrativo
 
-Para producción necesitarás:
-- Configurar webhook URL en Mercado Pago
-- Usar HTTPS
-- Configurar variables de entorno de producción
-- El frontend se encuentra en el directorio `../lunaperla/`
+Acceso en `http://localhost:3001/dashboard` (o producción)
+
+**Características:**
+
+- Estadísticas en tiempo real: Total pedidos, pendientes, aprobados, ingresos
+- Tabla con últimos 20 pedidos
+- Estados visuales (colores: amarillo, verde, rojo)
+- Auto-refresh cada 30 segundos
+- Responsive (móvil + desktop)
+- No requiere login
+
+## 🚀 Despliegue a Producción
+
+### Vercel
+
+1. Conectar repo a Vercel
+2. Configurar variables de entorno en Settings → Environment Variables
+3. URLs deben ser HTTPS (obligatorio para Mercado Pago)
+
+**Variables requeridas:**
+
+```env
+SUPABASE_URL=https://...
+SUPABASE_ANON_KEY=...
+MERCADO_PAGO_ACCESS_TOKEN=APP_USR-...
+FRONTEND_URL=https://tu-dominio.vercel.app
+BACKEND_URL=https://tu-backend.vercel.app
+RESEND_API_KEY=re_...
+```
+
+### Checklist Pre-Producción
+
+- [ ] Configurar Supabase y ejecutar `supabase-schema.sql`
+- [ ] Configurar webhook en Mercado Pago (URL: `https://tu-backend/api/webhook`)
+- [ ] Establecer variables de entorno en producción
+- [ ] Probar flujo completo de pago
+- [ ] Verificar emails se envíen correctamente
+- [ ] Monitorear órdenes en dashboard
+
+## 📚 Información Adicional
+
+**Base de datos:** Ver [SUPABASE.md](SUPABASE.md) para configuración completa
+
+**Scripts disponibles:**
+
+- `npm start` - Producción
+- `npm run dev` - Desarrollo con nodemon

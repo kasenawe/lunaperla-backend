@@ -29,3 +29,60 @@ FOR ALL USING (true);
 
 -- Agregar columna preference_id
 ALTER TABLE orders ADD COLUMN preference_id TEXT;
+
+-- Crear tabla products
+CREATE TABLE products (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name TEXT NOT NULL,
+  price DECIMAL(10,2) NOT NULL,
+  description TEXT,
+  image_url TEXT,
+  active BOOLEAN DEFAULT true,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Índices para mejor rendimiento
+CREATE INDEX idx_products_active ON products(active);
+CREATE INDEX idx_products_created_at ON products(created_at DESC);
+
+-- Políticas RLS
+ALTER TABLE products ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Allow all users to read products" ON products
+FOR SELECT USING (true);
+
+-- Seed inicial de productos (migrados desde frontend)
+-- Opcional: descomenta la siguiente línea si querés limpiar productos previos
+-- DELETE FROM products;
+
+INSERT INTO products (name, price, description, image_url, active)
+VALUES
+  (
+    'Canasta trenzada',
+    299.00,
+    'Caravanas tix bebe abridores en oro amarillo 18 k y perla de cultivo 4 mm.',
+    'canasta.PNG',
+    true
+  ),
+  (
+    'Bolita mediana',
+    330.00,
+    'Caravanas tix bebe abridores en oro amarillo 18 k y bolitas 3 1/2 mm',
+    'bolita.PNG',
+    true
+  ),
+  (
+    'Modelo simple',
+    280.00,
+    'Caravanas tix bebe abridores en oro amarillo 18 k y perla de cultivo 4 mm.',
+    'simple.PNG',
+    true
+  ),
+  (
+    'Modelo coronita',
+    360.00,
+    'Caravanas tix bebe abridores en oro amarillo 18 k y perla de cultivo 4 mm.',
+    'coronita.PNG',
+    true
+  );

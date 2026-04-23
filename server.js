@@ -208,12 +208,16 @@ async function sendConfirmationEmail(orderData) {
                 <span class="detail-value">${orderData.product}</span>
             </div>
 
-            ${orderData.product_description ? `
+            ${
+              orderData.product_description
+                ? `
             <div class="detail-row">
                 <span class="detail-label">Descripción:</span>
                 <span class="detail-value">${orderData.product_description}</span>
             </div>
-            ` : ''}
+            `
+                : ""
+            }
 
             <div class="detail-row">
                 <span class="detail-label">Precio:</span>
@@ -227,12 +231,14 @@ async function sendConfirmationEmail(orderData) {
 
             <div class="detail-row">
                 <span class="detail-label">Fecha:</span>
-                <span class="detail-value">${new Date(orderData.created_at).toLocaleDateString('es-ES', {
-                    year: 'numeric',
-                    month: 'long',
-                    day: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
+                <span class="detail-value">${new Date(
+                  orderData.created_at,
+                ).toLocaleDateString("es-ES", {
+                  year: "numeric",
+                  month: "long",
+                  day: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
                 })}</span>
             </div>
         </div>
@@ -240,7 +246,7 @@ async function sendConfirmationEmail(orderData) {
         <div class="contact-info">
             <h3>¿Necesitas Ayuda?</h3>
             <p>No dudes en contactarnos si tienes alguna pregunta sobre tu pedido.</p>
-            <p>📱 WhatsApp: ${orderData.customer_phone || 'Contactanos'}</p>
+            <p>📱 WhatsApp: ${orderData.customer_phone || "Contactanos"}</p>
             <p>💎 Visítanos en nuestras redes sociales</p>
         </div>
 
@@ -256,9 +262,9 @@ async function sendConfirmationEmail(orderData) {
 </html>`;
 
     const { data, error } = await resend.emails.send({
-      from: 'Luna Gold <onboarding@resend.dev>',
+      from: "Luna Gold <onboarding@resend.dev>",
       to: [orderData.customer_email],
-      subject: '✨ ¡Compra Confirmada! - Luna Gold',
+      subject: "✨ ¡Compra Confirmada! - Luna Gold",
       html: emailHtml,
     });
 
@@ -355,6 +361,25 @@ async function getOrderById(orderId) {
     throw error;
   }
 }
+
+// Endpoint para obtener productos activos
+app.get("/api/products", async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from("products")
+      .select("id, name, price, image_url, description")
+      .eq("active", true);
+
+    if (error) {
+      throw error;
+    }
+
+    res.json(data || []);
+  } catch (error) {
+    console.error("Error cargando productos:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
 
 // Endpoint para crear preferencia de pago
 app.post("/api/create-payment", async (req, res) => {
@@ -664,7 +689,7 @@ app.post("/api/test-email", async (req, res) => {
       customer_email: req.body.email || "test@example.com",
       customer_phone: "+5491123456789",
       product_description: "Anillo de plata 925 con piedra luna premium",
-      created_at: new Date().toISOString()
+      created_at: new Date().toISOString(),
     };
 
     console.log("🔍 Probando envío de email a:", testOrder.customer_email);
@@ -674,7 +699,12 @@ app.post("/api/test-email", async (req, res) => {
     res.json({ success: true, message: "Email de prueba enviado" });
   } catch (error) {
     console.error("❌ Error en test email:", error);
-    res.status(500).json({ error: "Error enviando email de prueba", details: error.message });
+    res
+      .status(500)
+      .json({
+        error: "Error enviando email de prueba",
+        details: error.message,
+      });
   }
 });
 

@@ -1,129 +1,160 @@
-# Backend Luna Gold - Integración Mercado Pago
+# Supabase - Configuración y Esquema de Base de Datos
 
-## 🚀 Configuración con Supabase
+Backend Luna Gold usa Supabase como base de datos PostgreSQL escalable y gratuita.
 
-### 1. Crear proyecto en Supabase
+## 🚀 Setup Inicial
 
-1. Ve a [supabase.com](https://supabase.com) y crea una cuenta
-2. Crea un nuevo proyecto
-3. Espera a que se configure (2-3 minutos)
+### 1. Crear Proyecto
 
-### 2. Configurar Base de Datos
+1. Ve a [supabase.com](https://supabase.com)
+2. Crea una cuenta (GitHub o email)
+3. Nuevo proyecto → Selecciona región más cercana
+4. Espera configuración (2-3 minutos)
 
-1. Ve a **SQL Editor** en tu proyecto Supabase
-2. Copia y pega el contenido de `supabase-schema.sql`
-3. Ejecuta el script para crear la tabla `orders`
+### 2. Ejecutar Script SQL
 
-### 3. Obtener credenciales
+1. Abre **SQL Editor** en tu proyecto
+2. Copia todo el contenido de `supabase-schema.sql`
+3. Pega en SQL Editor
+4. Click en **Run** o presiona `Cmd + Enter`
+
+Las tablas `orders` y `products` se crearán automáticamente.
+
+### 3. Obtener Credenciales
 
 1. Ve a **Settings** → **API**
 2. Copia:
-   - **Project URL** (SUPABASE_URL)
-   - **anon/public key** (SUPABASE_ANON_KEY)
-
-### 4. Configurar variables de entorno
-
-1. Copia `.env.example` a `.env`
-2. Completa las variables:
+   - **Project URL** → `SUPABASE_URL`
+   - **anon/public key** → `SUPABASE_ANON_KEY`
+3. Pega en tu `.env` local
 
 ```env
-# Mercado Pago
-MERCADO_PAGO_ACCESS_TOKEN=APP_USR-...
-
-# URLs de PRODUCCIÓN (HTTPS - requerido por Mercado Pago)
-FRONTEND_URL=https://tu-dominio.vercel.app
-BACKEND_URL=https://tu-backend.vercel.app
-
-# Supabase
 SUPABASE_URL=https://tu-proyecto.supabase.co
-SUPABASE_ANON_KEY=tu-anon-key
-
-# Puerto del backend
-PORT=3001
+SUPABASE_ANON_KEY=eyJ...
 ```
 
-### 5. Instalar dependencias
+## 📊 Esquema de Tablas
 
-```bash
-npm install
-```
+### Tabla `orders`
 
-### 6. Ejecutar el servidor
+Almacena todas las compras y sus estados de pago.
 
-```bash
-npm start
-```
+| Campo                 | Tipo      | Descripción                         |
+| --------------------- | --------- | ----------------------------------- |
+| `id`                  | TEXT      | ID único de la orden (PK)           |
+| `preference_id`       | TEXT      | ID de Mercado Pago                  |
+| `product`             | TEXT      | Nombre del producto                 |
+| `price`               | DECIMAL   | Precio pagado                       |
+| `status`              | TEXT      | Estado: pending, approved, rejected |
+| `customer_name`       | TEXT      | Nombre del cliente                  |
+| `customer_email`      | TEXT      | Email para confirmación             |
+| `customer_phone`      | TEXT      | Teléfono de contacto                |
+| `product_description` | TEXT      | Descripción completa                |
+| `init_point`          | TEXT      | URL de checkout MP                  |
+| `payment_id`          | TEXT      | ID del pago confirmado              |
+| `payment_data`        | JSONB     | Datos completos del webhook         |
+| `created_at`          | TIMESTAMP | Fecha de creación                   |
+| `updated_at`          | TIMESTAMP | Última actualización                |
 
-## 📊 Estructura de la tabla `orders`
+**Índices:**
 
-| Campo                 | Tipo      | Descripción                                        |
-| --------------------- | --------- | -------------------------------------------------- |
-| `id`                  | TEXT      | ID de la preferencia de Mercado Pago (Primary Key) |
-| `product`             | TEXT      | Nombre del producto                                |
-| `price`               | DECIMAL   | Precio del producto                                |
-| `status`              | TEXT      | Estado: 'pending', 'approved', 'rejected'          |
-| `customer_name`       | TEXT      | Nombre del cliente                                 |
-| `customer_phone`      | TEXT      | Teléfono del cliente                               |
-| `customer_email`      | TEXT      | Email del cliente                                  |
-| `product_description` | TEXT      | Descripción del producto                           |
-| `init_point`          | TEXT      | URL de pago de Mercado Pago                        |
-| `payment_id`          | TEXT      | ID del pago confirmado                             |
-| `payment_data`        | JSONB     | Datos completos del pago (webhook)                 |
-| `created_at`          | TIMESTAMP | Fecha de creación                                  |
-| `updated_at`          | TIMESTAMP | Fecha de actualización                             |
+- `idx_orders_status` - Búsquedas rápidas por estado
+- `idx_orders_created_at` - Ordenes más recientes primero
+- `idx_orders_payment_id` - Búsquedas por pago
 
-## 🔗 Endpoints disponibles
+### Tabla `products`
 
-### Crear pago
+Catálogo de productos para la tienda.
 
-```
-POST /api/create-payment
-```
+| Campo         | Tipo      | Descripción                    |
+| ------------- | --------- | ------------------------------ |
+| `id`          | UUID      | ID único (autogenerado)        |
+| `name`        | TEXT      | Nombre del producto            |
+| `price`       | DECIMAL   | Precio en USD                  |
+| `description` | TEXT      | Descripción larga              |
+| `image_url`   | TEXT      | URL de la imagen               |
+| `active`      | BOOLEAN   | Visible en tienda (true/false) |
+| `created_at`  | TIMESTAMP | Fecha creación                 |
+| `updated_at`  | TIMESTAMP | Última actualización           |
 
-**Body:**
+**Índices:**
 
-```json
-{
-  "product": {
-    "name": "Producto",
-    "description": "Descripción",
-    "price": 100.0
+- `idx_products_active` - Filtrar productos activos
+- `idx_products_created_at` - Productos más nuevos primero
+
+**Políticas RLS:**
+
+- Lectura pública para todos
+- Escritura solo autenticados (si necesario)
+
+## 🔒 Seguridad (RLS)
+
+Row Level Security está habilitado en ambas tablas:
+
+- **orders:** Acceso completo para API (verificado por backend)
+- **products:** Lectura pública, escritura autenticada
+
+Todos los datos sensibles se validan en el backend antes de guardar.
+
+## 📈 Uso desde Node.js
+
+Backend ya está configurado. Ejemplos de uso:
+
+```javascript
+// Obtener productos activos
+const { data } = await supabase
+  .from("products")
+  .select("id, name, price, image_url")
+  .eq("active", true);
+
+// Guardar orden
+await supabase.from("orders").insert([
+  {
+    id: "LP-123456",
+    product: "Anillo Gold",
+    price: 299.99,
+    status: "pending",
   },
-  "customerData": {
-    "name": "Juan Pérez",
-    "email": "juan@email.com",
-    "phone": "099123456"
-  }
-}
+]);
+
+// Actualizar estado
+await supabase
+  .from("orders")
+  .update({ status: "approved" })
+  .eq("id", "LP-123456");
 ```
 
-### Consultar órdenes
+## 💾 Monitorear Datos
 
-```
-GET /api/orders
-GET /api/orders/:orderId
-```
+Desde Supabase Dashboard:
 
-### Webhook de Mercado Pago
+1. **Table Editor** - Ver/editar datos manualmente
+2. **SQL Editor** - Queries personalizadas
+3. **Logs** - Errores y actividad
+4. **Backups** - Descargar datos
 
-```
-POST /api/webhook
-```
+## 🎯 Beneficios
 
-## ✅ Beneficios de Supabase
+✅ **Gratuito** - Plan suficiente para pequeños negocios  
+✅ **Escalable** - Crece con tu negocio  
+✅ **PostgreSQL Real** - No limitaciones de base de datos  
+✅ **Seguro** - Encriptación, RLS, backups automáticos  
+✅ **Rest API** - APIs automáticas para todos los datos  
+✅ **Soporte** - Documentación y comunidad activa
 
-- ✅ **Gratis** (hasta ciertos límites)
-- ✅ **Escalable** y confiable
-- ✅ **Base de datos PostgreSQL** real
-- ✅ **Dashboard web** para ver datos
-- ✅ **APIs REST** automáticas
-- ✅ **Seguridad** integrada (RLS)
+## 📞 Troubleshooting
 
-## 🚀 Próximos pasos
+**"SUPABASE_URL o SUPABASE_ANON_KEY no están definidas"**
 
-1. **Configurar Supabase** siguiendo los pasos arriba
-2. **Desplegar en Vercel** con las variables de entorno
-3. **Probar el flujo completo** de pago
-4. **Monitorear órdenes** desde el dashboard de Supabase
+- Verifica que el `.env` tenga exactamente esos nombres
+- No hay espacios antes/después del `=`
 
-¡Ya no perderás ventas! 🎉
+**Conexión rechazada**
+
+- Verifica que el URL y Key sean correctos
+- El proyecto está activo en Supabase
+
+**Tabla no existe**
+
+- Ejecuta `supabase-schema.sql` completo
+- Verifica en SQL Editor que se creó exitosamente
