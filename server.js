@@ -1,5 +1,6 @@
 const express = require("express");
 const cors = require("cors");
+const multer = require("multer");
 const { createClient } = require("@supabase/supabase-js");
 const { Resend } = require("resend");
 const { MercadoPagoConfig, Preference } = require("mercadopago");
@@ -10,14 +11,21 @@ const PORT = process.env.PORT || 3001;
 
 // Configurar Supabase
 const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_ANON_KEY;
+const supabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabaseKey = supabaseServiceRoleKey || process.env.SUPABASE_ANON_KEY;
+const storageBucket = process.env.SUPABASE_STORAGE_BUCKET || "products";
 
 if (!supabaseUrl || !supabaseKey) {
-  console.error("❌ SUPABASE_URL y SUPABASE_ANON_KEY son requeridos");
+  console.error(
+    "❌ SUPABASE_URL y una key de Supabase (SERVICE_ROLE o ANON) son requeridos",
+  );
   process.exit(1);
 }
 
 const supabase = createClient(supabaseUrl, supabaseKey);
+const supabaseAdmin = supabaseServiceRoleKey
+  ? createClient(supabaseUrl, supabaseServiceRoleKey)
+  : null;
 
 // Configurar Resend para emails
 const resendApiKey = process.env.RESEND_API_KEY;
@@ -35,6 +43,70 @@ const client = new MercadoPagoConfig({
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (!file.mimetype.startsWith("image/")) {
+      cb(new Error("Solo se permiten archivos de imagen"));
+      return;
+    }
+    cb(null, true);
+  },
+});
+
+function buildStoragePath(filename) {
+  const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, "-");
+  return `${Date.now()}-${safeName}`;
+}
+
+function extractStorageObjectPath(imageValue) {
+  if (!imageValue) {
+    return null;
+  }
+
+  const trimmedValue = String(imageValue).trim();
+  if (!trimmedValue) {
+    return null;
+  }
+
+  if (/^https?:\/\//i.test(trimmedValue)) {
+    const publicPrefix = `/storage/v1/object/public/${storageBucket}/`;
+
+    try {
+      const parsedUrl = new URL(trimmedValue);
+      const prefixIndex = parsedUrl.pathname.indexOf(publicPrefix);
+      if (prefixIndex === -1) {
+        return null;
+      }
+
+      return decodeURIComponent(
+        parsedUrl.pathname.slice(prefixIndex + publicPrefix.length),
+      );
+    } catch {
+      return null;
+    }
+  }
+
+  return trimmedValue.replace(/^\/+/, "").replace(/^products\//, "");
+}
+
+async function removeStorageObject(imageValue) {
+  const objectPath = extractStorageObjectPath(imageValue);
+
+  if (!supabaseAdmin || !objectPath) {
+    return;
+  }
+
+  const { error } = await supabaseAdmin.storage
+    .from(storageBucket)
+    .remove([objectPath]);
+
+  if (error) {
+    throw error;
+  }
+}
 
 // Funciones helper para Supabase
 async function saveOrder(orderData) {
@@ -362,13 +434,21 @@ async function getOrderById(orderId) {
   }
 }
 
-// Endpoint para obtener productos activos
+// Endpoint para obtener productos
 app.get("/api/products", async (req, res) => {
   try {
-    const { data, error } = await supabase
+    const includeAll = String(req.query.all || "").toLowerCase() === "true";
+
+    let query = supabase
       .from("products")
-      .select("id, name, price, image_url, description")
-      .eq("active", true);
+      .select("id, name, price, image_url, description, active")
+      .order("name", { ascending: true });
+
+    if (!includeAll) {
+      query = query.eq("active", true);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       throw error;
@@ -377,6 +457,255 @@ app.get("/api/products", async (req, res) => {
     res.json(data || []);
   } catch (error) {
     console.error("Error cargando productos:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
+
+// Endpoint para subir imagenes al bucket de productos usando service role
+app.post("/api/upload-image", (req, res) => {
+  upload.single("image")(req, res, async (uploadError) => {
+    if (uploadError) {
+      if (uploadError.code === "LIMIT_FILE_SIZE") {
+        return res
+          .status(400)
+          .json({ error: "La imagen debe pesar menos de 5MB" });
+      }
+
+      return res.status(400).json({
+        error: uploadError.message || "Error validando archivo de imagen",
+      });
+    }
+
+    try {
+      if (!supabaseAdmin) {
+        return res.status(500).json({
+          error:
+            "SUPABASE_SERVICE_ROLE_KEY no configurada en backend. No se puede subir imagen.",
+        });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({ error: "No se recibio ningun archivo" });
+      }
+
+      const objectPath = buildStoragePath(req.file.originalname || "image");
+
+      const { error: storageError } = await supabaseAdmin.storage
+        .from(storageBucket)
+        .upload(objectPath, req.file.buffer, {
+          cacheControl: "3600",
+          upsert: false,
+          contentType: req.file.mimetype || "application/octet-stream",
+        });
+
+      if (storageError) {
+        console.error("Error subiendo imagen a Supabase:", storageError);
+        return res.status(400).json({ error: storageError.message });
+      }
+
+      const { data } = supabaseAdmin.storage
+        .from(storageBucket)
+        .getPublicUrl(objectPath);
+
+      if (!data?.publicUrl) {
+        return res
+          .status(500)
+          .json({ error: "No se pudo obtener la URL publica de la imagen" });
+      }
+
+      res.status(201).json({
+        image_url: objectPath,
+        public_url: data.publicUrl,
+        path: objectPath,
+      });
+    } catch (error) {
+      console.error("Error en upload-image:", error);
+      res.status(500).json({
+        error: error?.message || "Error interno al subir imagen",
+      });
+    }
+  });
+});
+
+// Endpoint para crear producto
+app.post("/api/products", async (req, res) => {
+  try {
+    const { name, price, image_url, description, active } = req.body;
+
+    if (!name || price === undefined || !image_url || !description) {
+      return res.status(400).json({ error: "Faltan campos obligatorios" });
+    }
+
+    const { data, error } = await supabase
+      .from("products")
+      .insert([
+        {
+          name,
+          price,
+          image_url,
+          description,
+          active: active ?? true,
+        },
+      ])
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    res.status(201).json(data);
+  } catch (error) {
+    try {
+      await removeStorageObject(req.body?.image_url);
+    } catch (cleanupError) {
+      console.error(
+        "Error eliminando imagen huérfana al crear producto:",
+        cleanupError,
+      );
+    }
+
+    console.error("Error creando producto:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
+
+// Endpoint para actualizar producto
+app.put("/api/products/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, price, image_url, description, active } = req.body;
+
+    if (!name || price === undefined || !image_url || !description) {
+      return res.status(400).json({ error: "Faltan campos obligatorios" });
+    }
+
+    const { data: existingProduct, error: existingError } = await supabase
+      .from("products")
+      .select("id, image_url")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (existingError) {
+      throw existingError;
+    }
+
+    if (!existingProduct) {
+      return res.status(404).json({ error: "Producto no encontrado" });
+    }
+
+    const { data, error } = await supabase
+      .from("products")
+      .update({
+        name,
+        price,
+        image_url,
+        description,
+        active: active ?? true,
+      })
+      .eq("id", id)
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      throw error;
+    }
+
+    if (!data) {
+      if (image_url && image_url !== existingProduct.image_url) {
+        try {
+          await removeStorageObject(image_url);
+        } catch (cleanupError) {
+          console.error(
+            "Error eliminando imagen nueva tras fallo de update:",
+            cleanupError,
+          );
+        }
+      }
+
+      return res.status(403).json({
+        error:
+          "Sin permisos para actualizar producto. Configura SUPABASE_SERVICE_ROLE_KEY en backend o agrega policy UPDATE",
+      });
+    }
+
+    if (image_url && image_url !== existingProduct.image_url) {
+      try {
+        await removeStorageObject(existingProduct.image_url);
+      } catch (cleanupError) {
+        console.error(
+          "Error eliminando imagen anterior del producto:",
+          cleanupError,
+        );
+      }
+    }
+
+    res.json(data);
+  } catch (error) {
+    try {
+      const newImagePath = req.body?.image_url;
+      const currentProductId = req.params?.id;
+
+      if (newImagePath && currentProductId) {
+        const { data: existingProduct } = await supabase
+          .from("products")
+          .select("image_url")
+          .eq("id", currentProductId)
+          .maybeSingle();
+
+        if (!existingProduct || newImagePath !== existingProduct.image_url) {
+          await removeStorageObject(newImagePath);
+        }
+      }
+    } catch (cleanupError) {
+      console.error(
+        "Error eliminando imagen nueva tras excepción de update:",
+        cleanupError,
+      );
+    }
+
+    console.error("Error actualizando producto:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
+
+// Endpoint para eliminar producto
+app.delete("/api/products/:id", async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { data: existingProduct, error: existingError } = await supabase
+      .from("products")
+      .select("id, image_url")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (existingError) {
+      throw existingError;
+    }
+
+    if (!existingProduct) {
+      return res.status(404).json({ error: "Producto no encontrado" });
+    }
+
+    const { error } = await supabase.from("products").delete().eq("id", id);
+
+    if (error) {
+      throw error;
+    }
+
+    try {
+      await removeStorageObject(existingProduct.image_url);
+    } catch (cleanupError) {
+      console.error(
+        "Error eliminando imagen del producto borrado:",
+        cleanupError,
+      );
+    }
+
+    res.status(204).send();
+  } catch (error) {
+    console.error("Error eliminando producto:", error);
     res.status(500).json({ error: "Error interno del servidor" });
   }
 });
@@ -699,12 +1028,10 @@ app.post("/api/test-email", async (req, res) => {
     res.json({ success: true, message: "Email de prueba enviado" });
   } catch (error) {
     console.error("❌ Error en test email:", error);
-    res
-      .status(500)
-      .json({
-        error: "Error enviando email de prueba",
-        details: error.message,
-      });
+    res.status(500).json({
+      error: "Error enviando email de prueba",
+      details: error.message,
+    });
   }
 });
 

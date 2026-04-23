@@ -52,6 +52,37 @@ ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow all users to read products" ON products
 FOR SELECT USING (true);
 
+-- Trigger idempotente para mantener updated_at automáticamente en products
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$;
+
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM pg_trigger t
+    JOIN pg_class c ON c.oid = t.tgrelid
+    WHERE t.tgname = 'update_products_updated_at'
+      AND c.relname = 'products'
+      AND NOT t.tgisinternal
+  ) THEN
+    DROP TRIGGER update_products_updated_at ON products;
+  END IF;
+
+  CREATE TRIGGER update_products_updated_at
+  BEFORE UPDATE ON products
+  FOR EACH ROW
+  EXECUTE FUNCTION update_updated_at_column();
+END;
+$$;
+
 -- Seed inicial de productos (migrados desde frontend)
 -- Opcional: descomenta la siguiente línea si querés limpiar productos previos
 -- DELETE FROM products;

@@ -1,6 +1,6 @@
 # Backend Luna Gold - Mercado Pago + Supabase
 
-API backend profesional con integración completa: pagos, persistencia de datos, dashboard administrativo y emails automáticos.
+API backend con integración completa: pagos, persistencia en Supabase, emails automáticos, dashboard y soporte administrativo para productos.
 
 ## 🏗️ Estructura del Proyecto
 
@@ -14,6 +14,7 @@ lunaperla-backend/   # Backend (Node.js + Express) ← Estás aquí
 - Node.js v16+
 - npm o yarn
 - Cuentas en: Mercado Pago, Supabase, Resend (opcional)
+- Bucket de Supabase Storage para imágenes de productos (por defecto: `products`)
 
 ## ⚡ Inicio Rápido
 
@@ -36,6 +37,8 @@ lunaperla-backend/   # Backend (Node.js + Express) ← Estás aquí
    # Supabase (https://supabase.com)
    SUPABASE_URL=https://tu-proyecto.supabase.co
    SUPABASE_ANON_KEY=tu-anon-key
+   SUPABASE_SERVICE_ROLE_KEY=tu-service-role-key
+   SUPABASE_STORAGE_BUCKET=products
 
    # Resend - Email automático (https://resend.com) - OPCIONAL
    RESEND_API_KEY=re_...
@@ -52,7 +55,7 @@ lunaperla-backend/   # Backend (Node.js + Express) ← Estás aquí
 
 ## ⚙️ Configuración Detallada
 
-Ver **[SUPABASE.md](SUPABASE.md)** para configuración completa de base de datos.
+Ver [README-Supabase.md](README-Supabase.md) para configuración completa de base de datos, trigger `updated_at` y Storage.
 
 **Mercado Pago:**
 
@@ -98,6 +101,8 @@ Webhook automático de Mercado Pago. Actualiza órdenes y envía emails de confi
 
 Obtener productos activos para mostrar en tienda.
 
+Si se envía `?all=true`, devuelve también productos inactivos para el panel admin.
+
 **Response:**
 
 ```json
@@ -106,11 +111,60 @@ Obtener productos activos para mostrar en tienda.
     "id": "uuid",
     "name": "Anillo Luna Gold",
     "price": 299.99,
-    "image_url": "...",
-    "description": "..."
+    "image_url": "1776975642449-alianzas.png",
+    "description": "...",
+    "active": true
   }
 ]
 ```
+
+### POST /api/upload-image
+
+Sube una imagen de producto a Supabase Storage usando `SUPABASE_SERVICE_ROLE_KEY`.
+
+- Content-Type: `multipart/form-data`
+- Campo esperado: `image`
+- Límite: 5 MB
+- Tipos permitidos: imágenes (`image/*`)
+
+**Response:**
+
+```json
+{
+  "image_url": "1776975642449-alianzas.png",
+  "public_url": "https://PROJECT.supabase.co/storage/v1/object/public/products/1776975642449-alianzas.png",
+  "path": "1776975642449-alianzas.png"
+}
+```
+
+### POST /api/products
+
+Crea un producto en la tabla `products`.
+
+**Body:**
+
+```json
+{
+  "name": "Alianzas",
+  "price": 250,
+  "image_url": "1776975642449-alianzas.png",
+  "description": "Par de alianzas de oro",
+  "active": true
+}
+```
+
+Si la creación falla después de subir una imagen, el backend intenta eliminar esa imagen para evitar archivos huérfanos.
+
+### PUT /api/products/:id
+
+Actualiza un producto existente.
+
+- Si la imagen cambió, elimina la imagen anterior del bucket.
+- `updated_at` se actualiza automáticamente desde Supabase mediante trigger.
+
+### DELETE /api/products/:id
+
+Elimina el producto y también elimina su imagen asociada del bucket, si existe.
 
 ### GET /api/orders
 
@@ -168,6 +222,23 @@ Acceso en `http://localhost:3001/dashboard` (o producción)
 - Responsive (móvil + desktop)
 - No requiere login
 
+## 🛍️ Integración con Panel Admin Frontend
+
+El frontend en `../lunaperla` consume estos endpoints para el panel `/admin`:
+
+- `GET /api/products?all=true`
+- `POST /api/upload-image`
+- `POST /api/products`
+- `PUT /api/products/:id`
+- `DELETE /api/products/:id`
+
+Detalles importantes:
+
+- La base guarda en `products.image_url` solo el path del objeto en Storage, no la URL pública completa.
+- El frontend normaliza ese path usando su `VITE_SUPABASE_STORAGE_PUBLIC_BASE_URL`.
+- La subida a Storage se hace solo desde backend con `SUPABASE_SERVICE_ROLE_KEY`.
+- El backend limpia imágenes huérfanas al fallar create/update y borra la imagen anterior al reemplazarla.
+
 ## 🚀 Despliegue a Producción
 
 ### Vercel
@@ -181,6 +252,8 @@ Acceso en `http://localhost:3001/dashboard` (o producción)
 ```env
 SUPABASE_URL=https://...
 SUPABASE_ANON_KEY=...
+SUPABASE_SERVICE_ROLE_KEY=...
+SUPABASE_STORAGE_BUCKET=products
 MERCADO_PAGO_ACCESS_TOKEN=APP_USR-...
 FRONTEND_URL=https://tu-dominio.vercel.app
 BACKEND_URL=https://tu-backend.vercel.app
@@ -190,15 +263,19 @@ RESEND_API_KEY=re_...
 ### Checklist Pre-Producción
 
 - [ ] Configurar Supabase y ejecutar `supabase-schema.sql`
+- [ ] Crear bucket `products` en Supabase Storage
+- [ ] Configurar `SUPABASE_SERVICE_ROLE_KEY`
+- [ ] Crear trigger de `updated_at` para `products`
 - [ ] Configurar webhook en Mercado Pago (URL: `https://tu-backend/api/webhook`)
 - [ ] Establecer variables de entorno en producción
 - [ ] Probar flujo completo de pago
+- [ ] Probar CRUD de productos e imágenes desde `/admin`
 - [ ] Verificar emails se envíen correctamente
 - [ ] Monitorear órdenes en dashboard
 
 ## 📚 Información Adicional
 
-**Base de datos:** Ver [SUPABASE.md](SUPABASE.md) para configuración completa
+**Base de datos:** Ver [README-Supabase.md](README-Supabase.md) para configuración completa
 
 **Scripts disponibles:**
 
