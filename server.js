@@ -56,6 +56,393 @@ const upload = multer({
   },
 });
 
+const DEFAULT_CATEGORY_SLUG = "bebe";
+const DEFAULT_CATEGORIES = [
+  {
+    slug: "bebe",
+    name: "Coleccion Bebe",
+    description: "Caravanas y joyas delicadas para bebe.",
+  },
+  {
+    slug: "alianzas",
+    name: "Alianzas",
+    description: "Anillos y alianzas para compromiso, boda o regalo.",
+  },
+  {
+    slug: "anillos",
+    name: "Anillos",
+    description: "Piezas clasicas y contemporaneas para uso diario o especial.",
+  },
+  {
+    slug: "collares",
+    name: "Collares",
+    description: "Diseños para sumar brillo y elegancia a cada look.",
+  },
+  {
+    slug: "pulseras",
+    name: "Pulseras",
+    description: "Detalles finos para regalar o completar un conjunto.",
+  },
+];
+const DEFAULT_COLLECTIONS = [];
+
+function slugifyValue(value) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-{2,}/g, "-");
+}
+
+function slugifyCategoryName(value) {
+  return slugifyValue(value);
+}
+
+function formatCategoryNameFromSlug(slug) {
+  return String(slug || "")
+    .split("-")
+    .filter(Boolean)
+    .map((chunk) => chunk.charAt(0).toUpperCase() + chunk.slice(1))
+    .join(" ");
+}
+
+function normalizeProductCategoryPayload(payload = {}) {
+  const rawName =
+    typeof payload.category === "string" ? payload.category.trim() : "";
+  const rawSlug =
+    typeof payload.category_slug === "string"
+      ? slugifyCategoryName(payload.category_slug)
+      : "";
+
+  const matchedDefault = DEFAULT_CATEGORIES.find(
+    (item) =>
+      item.slug === rawSlug ||
+      item.name.toLowerCase() === rawName.toLowerCase(),
+  );
+
+  const categorySlug =
+    rawSlug || slugifyCategoryName(rawName) || DEFAULT_CATEGORY_SLUG;
+  const categoryName =
+    rawName || matchedDefault?.name || formatCategoryNameFromSlug(categorySlug);
+
+  return {
+    category: categoryName,
+    category_slug: categorySlug,
+  };
+}
+
+function normalizeProductCollectionPayload(payload = {}) {
+  const rawName =
+    typeof payload.collection === "string" ? payload.collection.trim() : "";
+  const rawSlug =
+    typeof payload.collection_slug === "string"
+      ? slugifyValue(payload.collection_slug)
+      : "";
+
+  if (!rawName && !rawSlug) {
+    return {
+      collection: null,
+      collection_slug: null,
+    };
+  }
+
+  const collectionSlug = rawSlug || slugifyValue(rawName);
+  const collectionName = rawName || formatCategoryNameFromSlug(collectionSlug);
+
+  return {
+    collection: collectionName,
+    collection_slug: collectionSlug || null,
+  };
+}
+
+function isMissingCatalogRelation(error) {
+  return (
+    error?.code === "42P01" ||
+    String(error?.message || "")
+      .toLowerCase()
+      .includes("does not exist")
+  );
+}
+
+function isMissingCatalogColumn(error) {
+  return (
+    error?.code === "42703" ||
+    error?.code === "PGRST204" ||
+    String(error?.message || "")
+      .toLowerCase()
+      .includes("collection")
+  );
+}
+
+function normalizeCategoryRecord(record = {}, fallbackSortOrder = 0) {
+  const slug = typeof record.slug === "string" ? record.slug.trim() : "";
+  const name = typeof record.name === "string" ? record.name.trim() : "";
+
+  return {
+    slug: slug || DEFAULT_CATEGORY_SLUG,
+    name: name || formatCategoryNameFromSlug(slug) || "Coleccion Bebe",
+    description:
+      typeof record.description === "string" ? record.description : "",
+    active: record.active ?? true,
+    sort_order:
+      typeof record.sort_order === "number"
+        ? record.sort_order
+        : fallbackSortOrder,
+  };
+}
+
+function normalizeCollectionRecord(record = {}, fallbackSortOrder = 0) {
+  const slug = typeof record.slug === "string" ? record.slug.trim() : "";
+  const name = typeof record.name === "string" ? record.name.trim() : "";
+  const categorySlug =
+    typeof record.category_slug === "string"
+      ? record.category_slug.trim()
+      : DEFAULT_CATEGORY_SLUG;
+
+  return {
+    slug: slug || slugifyValue(name),
+    name: name || formatCategoryNameFromSlug(slug),
+    description:
+      typeof record.description === "string" ? record.description : "",
+    category_slug: categorySlug || DEFAULT_CATEGORY_SLUG,
+    active: record.active ?? true,
+    sort_order:
+      typeof record.sort_order === "number"
+        ? record.sort_order
+        : fallbackSortOrder,
+  };
+}
+
+async function getAvailableCategoriesFallback() {
+  const { data, error } = await supabase
+    .from("products")
+    .select("category, category_slug")
+    .order("category", { ascending: true });
+
+  if (error) {
+    throw error;
+  }
+
+  const categoryMap = new Map(
+    DEFAULT_CATEGORIES.map((item) => [item.slug, { ...item }]),
+  );
+
+  for (const item of data || []) {
+    const normalized = normalizeProductCategoryPayload(item);
+    const existing = categoryMap.get(normalized.category_slug);
+
+    categoryMap.set(normalized.category_slug, {
+      slug: normalized.category_slug,
+      name: normalized.category,
+      description:
+        existing?.description ||
+        `Joyas seleccionadas dentro de ${normalized.category.toLowerCase()}.`,
+    });
+  }
+
+  return Array.from(categoryMap.values()).sort((left, right) => {
+    const leftIndex = DEFAULT_CATEGORIES.findIndex(
+      (item) => item.slug === left.slug,
+    );
+    const rightIndex = DEFAULT_CATEGORIES.findIndex(
+      (item) => item.slug === right.slug,
+    );
+
+    if (leftIndex !== -1 && rightIndex !== -1) {
+      return leftIndex - rightIndex;
+    }
+
+    if (leftIndex !== -1) {
+      return -1;
+    }
+
+    if (rightIndex !== -1) {
+      return 1;
+    }
+
+    return left.name.localeCompare(right.name, "es");
+  });
+}
+
+async function getCategoriesCatalog({ includeAll = false } = {}) {
+  const { data, error } = await supabase
+    .from("categories")
+    .select("slug, name, description, active, sort_order")
+    .order("sort_order", { ascending: true })
+    .order("name", { ascending: true });
+
+  if (error) {
+    if (isMissingCatalogRelation(error)) {
+      const fallback = await getAvailableCategoriesFallback();
+      return fallback.map((item, index) => ({
+        ...item,
+        active: true,
+        sort_order: index,
+      }));
+    }
+
+    throw error;
+  }
+
+  const categories = (data || []).map((item, index) =>
+    normalizeCategoryRecord(item, index),
+  );
+
+  if (includeAll) {
+    return categories;
+  }
+
+  return categories.filter((item) => item.active);
+}
+
+async function getCollectionsCatalog({
+  includeAll = false,
+  categorySlug = null,
+} = {}) {
+  let query = supabase
+    .from("collections")
+    .select("slug, name, description, category_slug, active, sort_order")
+    .order("sort_order", { ascending: true })
+    .order("name", { ascending: true });
+
+  if (categorySlug) {
+    query = query.eq("category_slug", categorySlug);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    if (isMissingCatalogRelation(error)) {
+      return DEFAULT_COLLECTIONS;
+    }
+
+    throw error;
+  }
+
+  const collections = (data || [])
+    .map((item, index) => normalizeCollectionRecord(item, index))
+    .filter((item) => item.slug && item.name && item.category_slug);
+
+  if (includeAll) {
+    return collections;
+  }
+
+  return collections.filter((item) => item.active);
+}
+
+async function findCategoryBySlug(slug) {
+  if (!slug) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from("categories")
+    .select("slug, name, description, active, sort_order")
+    .eq("slug", slug)
+    .maybeSingle();
+
+  if (error) {
+    if (isMissingCatalogRelation(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+
+  return data ? normalizeCategoryRecord(data) : null;
+}
+
+async function findCollectionBySlug(slug) {
+  if (!slug) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from("collections")
+    .select("slug, name, description, category_slug, active, sort_order")
+    .eq("slug", slug)
+    .maybeSingle();
+
+  if (error) {
+    if (isMissingCatalogRelation(error)) {
+      return null;
+    }
+
+    throw error;
+  }
+
+  return data ? normalizeCollectionRecord(data) : null;
+}
+
+async function resolveProductCatalogPayload(payload = {}) {
+  let categoryData = normalizeProductCategoryPayload(payload);
+  const collectionData = normalizeProductCollectionPayload(payload);
+
+  const resolvedCategory = await findCategoryBySlug(categoryData.category_slug);
+  if (resolvedCategory) {
+    categoryData = {
+      category: resolvedCategory.name,
+      category_slug: resolvedCategory.slug,
+    };
+  }
+
+  let collectionPayload = {
+    collection: null,
+    collection_slug: null,
+  };
+
+  if (collectionData.collection_slug) {
+    const resolvedCollection = await findCollectionBySlug(
+      collectionData.collection_slug,
+    );
+
+    if (resolvedCollection) {
+      collectionPayload = {
+        collection: resolvedCollection.name,
+        collection_slug: resolvedCollection.slug,
+      };
+
+      if (
+        resolvedCollection.category_slug &&
+        resolvedCollection.category_slug !== categoryData.category_slug
+      ) {
+        const linkedCategory = await findCategoryBySlug(
+          resolvedCollection.category_slug,
+        );
+
+        categoryData = linkedCategory
+          ? {
+              category: linkedCategory.name,
+              category_slug: linkedCategory.slug,
+            }
+          : {
+              category: formatCategoryNameFromSlug(
+                resolvedCollection.category_slug,
+              ),
+              category_slug: resolvedCollection.category_slug,
+            };
+      }
+    } else {
+      collectionPayload = collectionData;
+    }
+  }
+
+  return {
+    ...categoryData,
+    ...collectionPayload,
+  };
+}
+
+function mapProductResponse(item) {
+  return {
+    ...item,
+    ...normalizeProductCategoryPayload(item),
+    ...normalizeProductCollectionPayload(item),
+  };
+}
+
 function buildStoragePath(filename) {
   const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, "-");
   return `${Date.now()}-${safeName}`;
@@ -441,22 +828,382 @@ app.get("/api/products", async (req, res) => {
 
     let query = supabase
       .from("products")
-      .select("id, name, price, image_url, description, active")
+      .select(
+        "id, name, price, image_url, description, active, category, category_slug, collection, collection_slug",
+      )
+      .order("category_slug", { ascending: true })
+      .order("collection_slug", { ascending: true })
       .order("name", { ascending: true });
 
     if (!includeAll) {
       query = query.eq("active", true);
     }
 
-    const { data, error } = await query;
+    let { data, error } = await query;
+
+    if (error && isMissingCatalogColumn(error)) {
+      let fallbackQuery = supabase
+        .from("products")
+        .select(
+          "id, name, price, image_url, description, active, category, category_slug",
+        )
+        .order("category_slug", { ascending: true })
+        .order("name", { ascending: true });
+
+      if (!includeAll) {
+        fallbackQuery = fallbackQuery.eq("active", true);
+      }
+
+      const fallbackResult = await fallbackQuery;
+      data = (fallbackResult.data || []).map((item) => ({
+        ...item,
+        collection: null,
+        collection_slug: null,
+      }));
+      error = fallbackResult.error;
+    }
 
     if (error) {
       throw error;
     }
 
-    res.json(data || []);
+    res.json((data || []).map((item) => mapProductResponse(item)));
   } catch (error) {
     console.error("Error cargando productos:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
+
+app.get("/api/categories", async (req, res) => {
+  try {
+    const includeAll = String(req.query.all || "").toLowerCase() === "true";
+    const categories = await getCategoriesCatalog({ includeAll });
+    res.json(categories);
+  } catch (error) {
+    console.error("Error cargando categorias:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
+
+app.post("/api/categories", async (req, res) => {
+  try {
+    const payload = normalizeCategoryRecord(req.body);
+
+    if (!payload.name || !payload.slug) {
+      return res.status(400).json({ error: "Nombre y slug son obligatorios" });
+    }
+
+    const existingCategory = await findCategoryBySlug(payload.slug);
+    if (existingCategory) {
+      return res
+        .status(409)
+        .json({ error: "Ya existe una categoria con ese slug" });
+    }
+
+    const { data, error } = await supabase
+      .from("categories")
+      .insert([payload])
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    res.status(201).json(normalizeCategoryRecord(data));
+  } catch (error) {
+    console.error("Error creando categoria:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
+
+app.put("/api/categories/:slug", async (req, res) => {
+  try {
+    const currentSlug = slugifyValue(req.params.slug);
+    const payload = normalizeCategoryRecord(req.body);
+
+    if (!payload.name || !payload.slug) {
+      return res.status(400).json({ error: "Nombre y slug son obligatorios" });
+    }
+
+    const existingCategory = await findCategoryBySlug(currentSlug);
+    if (!existingCategory) {
+      return res.status(404).json({ error: "Categoria no encontrada" });
+    }
+
+    if (payload.slug !== currentSlug) {
+      const categoryWithNewSlug = await findCategoryBySlug(payload.slug);
+      if (categoryWithNewSlug) {
+        return res
+          .status(409)
+          .json({ error: "Ya existe una categoria con ese slug" });
+      }
+    }
+
+    const { data, error } = await supabase
+      .from("categories")
+      .update(payload)
+      .eq("slug", currentSlug)
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    const productsUpdate = await supabase
+      .from("products")
+      .update({
+        category: payload.name,
+        category_slug: payload.slug,
+      })
+      .eq("category_slug", currentSlug);
+
+    if (productsUpdate.error && !isMissingCatalogColumn(productsUpdate.error)) {
+      throw productsUpdate.error;
+    }
+
+    const collectionsUpdate = await supabase
+      .from("collections")
+      .update({ category_slug: payload.slug })
+      .eq("category_slug", currentSlug);
+
+    if (
+      collectionsUpdate.error &&
+      !isMissingCatalogRelation(collectionsUpdate.error)
+    ) {
+      throw collectionsUpdate.error;
+    }
+
+    res.json(normalizeCategoryRecord(data));
+  } catch (error) {
+    console.error("Error actualizando categoria:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
+
+app.delete("/api/categories/:slug", async (req, res) => {
+  try {
+    const slug = slugifyValue(req.params.slug);
+    const existingCategory = await findCategoryBySlug(slug);
+
+    if (!existingCategory) {
+      return res.status(404).json({ error: "Categoria no encontrada" });
+    }
+
+    const { count: productCount, error: productCountError } = await supabase
+      .from("products")
+      .select("id", { count: "exact", head: true })
+      .eq("category_slug", slug);
+
+    if (productCountError) {
+      throw productCountError;
+    }
+
+    if ((productCount || 0) > 0) {
+      return res.status(400).json({
+        error:
+          "No puedes eliminar una categoria que todavia tiene productos asociados",
+      });
+    }
+
+    const { count: collectionCount, error: collectionCountError } =
+      await supabase
+        .from("collections")
+        .select("slug", { count: "exact", head: true })
+        .eq("category_slug", slug);
+
+    if (
+      collectionCountError &&
+      !isMissingCatalogRelation(collectionCountError)
+    ) {
+      throw collectionCountError;
+    }
+
+    if ((collectionCount || 0) > 0) {
+      return res.status(400).json({
+        error:
+          "No puedes eliminar una categoria que todavia tiene colecciones asociadas",
+      });
+    }
+
+    const { error } = await supabase
+      .from("categories")
+      .delete()
+      .eq("slug", slug);
+
+    if (error) {
+      throw error;
+    }
+
+    res.status(204).send();
+  } catch (error) {
+    console.error("Error eliminando categoria:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
+
+app.get("/api/collections", async (req, res) => {
+  try {
+    const includeAll = String(req.query.all || "").toLowerCase() === "true";
+    const categorySlug =
+      typeof req.query.category_slug === "string"
+        ? slugifyValue(req.query.category_slug)
+        : null;
+
+    const collections = await getCollectionsCatalog({
+      includeAll,
+      categorySlug,
+    });
+    res.json(collections);
+  } catch (error) {
+    console.error("Error cargando colecciones:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
+
+app.post("/api/collections", async (req, res) => {
+  try {
+    const payload = normalizeCollectionRecord(req.body);
+
+    if (!payload.name || !payload.slug || !payload.category_slug) {
+      return res.status(400).json({
+        error: "Nombre, slug y categoria son obligatorios",
+      });
+    }
+
+    const linkedCategory = await findCategoryBySlug(payload.category_slug);
+    if (!linkedCategory) {
+      return res
+        .status(400)
+        .json({ error: "La categoria seleccionada no existe" });
+    }
+
+    const existingCollection = await findCollectionBySlug(payload.slug);
+    if (existingCollection) {
+      return res
+        .status(409)
+        .json({ error: "Ya existe una coleccion con ese slug" });
+    }
+
+    const { data, error } = await supabase
+      .from("collections")
+      .insert([payload])
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    res.status(201).json(normalizeCollectionRecord(data));
+  } catch (error) {
+    console.error("Error creando coleccion:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
+
+app.put("/api/collections/:slug", async (req, res) => {
+  try {
+    const currentSlug = slugifyValue(req.params.slug);
+    const payload = normalizeCollectionRecord(req.body);
+
+    if (!payload.name || !payload.slug || !payload.category_slug) {
+      return res.status(400).json({
+        error: "Nombre, slug y categoria son obligatorios",
+      });
+    }
+
+    const existingCollection = await findCollectionBySlug(currentSlug);
+    if (!existingCollection) {
+      return res.status(404).json({ error: "Coleccion no encontrada" });
+    }
+
+    const linkedCategory = await findCategoryBySlug(payload.category_slug);
+    if (!linkedCategory) {
+      return res
+        .status(400)
+        .json({ error: "La categoria seleccionada no existe" });
+    }
+
+    if (payload.slug !== currentSlug) {
+      const collectionWithNewSlug = await findCollectionBySlug(payload.slug);
+      if (collectionWithNewSlug) {
+        return res
+          .status(409)
+          .json({ error: "Ya existe una coleccion con ese slug" });
+      }
+    }
+
+    const { data, error } = await supabase
+      .from("collections")
+      .update(payload)
+      .eq("slug", currentSlug)
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
+
+    const productsUpdate = await supabase
+      .from("products")
+      .update({
+        collection: payload.name,
+        collection_slug: payload.slug,
+        category: linkedCategory.name,
+        category_slug: linkedCategory.slug,
+      })
+      .eq("collection_slug", currentSlug);
+
+    if (productsUpdate.error && !isMissingCatalogColumn(productsUpdate.error)) {
+      throw productsUpdate.error;
+    }
+
+    res.json(normalizeCollectionRecord(data));
+  } catch (error) {
+    console.error("Error actualizando coleccion:", error);
+    res.status(500).json({ error: "Error interno del servidor" });
+  }
+});
+
+app.delete("/api/collections/:slug", async (req, res) => {
+  try {
+    const slug = slugifyValue(req.params.slug);
+    const existingCollection = await findCollectionBySlug(slug);
+
+    if (!existingCollection) {
+      return res.status(404).json({ error: "Coleccion no encontrada" });
+    }
+
+    const { count: productCount, error: productCountError } = await supabase
+      .from("products")
+      .select("id", { count: "exact", head: true })
+      .eq("collection_slug", slug);
+
+    if (productCountError && !isMissingCatalogColumn(productCountError)) {
+      throw productCountError;
+    }
+
+    if ((productCount || 0) > 0) {
+      return res.status(400).json({
+        error:
+          "No puedes eliminar una coleccion que todavia tiene productos asociados",
+      });
+    }
+
+    const { error } = await supabase
+      .from("collections")
+      .delete()
+      .eq("slug", slug);
+
+    if (error) {
+      throw error;
+    }
+
+    res.status(204).send();
+  } catch (error) {
+    console.error("Error eliminando coleccion:", error);
     res.status(500).json({ error: "Error interno del servidor" });
   }
 });
@@ -531,6 +1278,7 @@ app.post("/api/upload-image", (req, res) => {
 app.post("/api/products", async (req, res) => {
   try {
     const { name, price, image_url, description, active } = req.body;
+    const catalogData = await resolveProductCatalogPayload(req.body);
 
     if (!name || price === undefined || !image_url || !description) {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
@@ -544,6 +1292,10 @@ app.post("/api/products", async (req, res) => {
           price,
           image_url,
           description,
+          category: catalogData.category,
+          category_slug: catalogData.category_slug,
+          collection: catalogData.collection,
+          collection_slug: catalogData.collection_slug,
           active: active ?? true,
         },
       ])
@@ -551,10 +1303,17 @@ app.post("/api/products", async (req, res) => {
       .single();
 
     if (error) {
+      if (isMissingCatalogColumn(error) || isMissingCatalogRelation(error)) {
+        return res.status(400).json({
+          error:
+            "Faltan columnas o tablas del catalogo. Ejecuta la migracion de fase 2 en Supabase.",
+        });
+      }
+
       throw error;
     }
 
-    res.status(201).json(data);
+    res.status(201).json(mapProductResponse(data));
   } catch (error) {
     try {
       await removeStorageObject(req.body?.image_url);
@@ -575,6 +1334,7 @@ app.put("/api/products/:id", async (req, res) => {
   try {
     const { id } = req.params;
     const { name, price, image_url, description, active } = req.body;
+    const catalogData = await resolveProductCatalogPayload(req.body);
 
     if (!name || price === undefined || !image_url || !description) {
       return res.status(400).json({ error: "Faltan campos obligatorios" });
@@ -601,6 +1361,10 @@ app.put("/api/products/:id", async (req, res) => {
         price,
         image_url,
         description,
+        category: catalogData.category,
+        category_slug: catalogData.category_slug,
+        collection: catalogData.collection,
+        collection_slug: catalogData.collection_slug,
         active: active ?? true,
       })
       .eq("id", id)
@@ -608,6 +1372,13 @@ app.put("/api/products/:id", async (req, res) => {
       .maybeSingle();
 
     if (error) {
+      if (isMissingCatalogColumn(error) || isMissingCatalogRelation(error)) {
+        return res.status(400).json({
+          error:
+            "Faltan columnas o tablas del catalogo. Ejecuta la migracion de fase 2 en Supabase.",
+        });
+      }
+
       throw error;
     }
 
@@ -640,7 +1411,7 @@ app.put("/api/products/:id", async (req, res) => {
       }
     }
 
-    res.json(data);
+    res.json(mapProductResponse(data));
   } catch (error) {
     try {
       const newImagePath = req.body?.image_url;

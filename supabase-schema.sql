@@ -37,6 +37,8 @@ CREATE TABLE products (
   price DECIMAL(10,2) NOT NULL,
   description TEXT,
   image_url TEXT,
+  category TEXT NOT NULL DEFAULT 'Coleccion Bebe',
+  category_slug TEXT NOT NULL DEFAULT 'bebe',
   active BOOLEAN DEFAULT true,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -44,6 +46,7 @@ CREATE TABLE products (
 
 -- Índices para mejor rendimiento
 CREATE INDEX idx_products_active ON products(active);
+CREATE INDEX idx_products_category_slug ON products(category_slug);
 CREATE INDEX idx_products_created_at ON products(created_at DESC);
 
 -- Políticas RLS
@@ -87,13 +90,15 @@ $$;
 -- Opcional: descomenta la siguiente línea si querés limpiar productos previos
 -- DELETE FROM products;
 
-INSERT INTO products (name, price, description, image_url, active)
+INSERT INTO products (name, price, description, image_url, category, category_slug, active)
 VALUES
   (
     'Canasta trenzada',
     299.00,
     'Caravanas tix bebe abridores en oro amarillo 18 k y perla de cultivo 4 mm.',
     'canasta.PNG',
+    'Coleccion Bebe',
+    'bebe',
     true
   ),
   (
@@ -101,6 +106,8 @@ VALUES
     330.00,
     'Caravanas tix bebe abridores en oro amarillo 18 k y bolitas 3 1/2 mm',
     'bolita.PNG',
+    'Coleccion Bebe',
+    'bebe',
     true
   ),
   (
@@ -108,6 +115,8 @@ VALUES
     280.00,
     'Caravanas tix bebe abridores en oro amarillo 18 k y perla de cultivo 4 mm.',
     'simple.PNG',
+    'Coleccion Bebe',
+    'bebe',
     true
   ),
   (
@@ -115,5 +124,7 @@ VALUES
     360.00,
     'Caravanas tix bebe abridores en oro amarillo 18 k y perla de cultivo 4 mm.',
     'coronita.PNG',
+    'Coleccion Bebe',
+    'bebe',
     true
   );

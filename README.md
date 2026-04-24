@@ -1,6 +1,13 @@
 # Backend Luna Gold - Mercado Pago + Supabase
 
-API backend con integración completa: pagos, persistencia en Supabase, emails automáticos, dashboard y soporte administrativo para productos.
+API backend con integración completa: pagos, persistencia en Supabase, emails automáticos, dashboard y soporte administrativo para productos, categorias y colecciones.
+
+La estructura de catalogo ya soporta:
+
+- categorias reales en tabla `categories`
+- colecciones opcionales en tabla `collections`
+- propagacion de cambios de categoria/coleccion hacia `products`
+- fallback de compatibilidad cuando la fase 2 todavia no fue migrada
 
 ## 🏗️ Estructura del Proyecto
 
@@ -56,6 +63,16 @@ lunaperla-backend/   # Backend (Node.js + Express) ← Estás aquí
 ## ⚙️ Configuración Detallada
 
 Ver [README-Supabase.md](README-Supabase.md) para configuración completa de base de datos, trigger `updated_at` y Storage.
+
+Si tu tabla `products` ya existe:
+
+- Ejecuta [supabase-categories-migration.sql](supabase-categories-migration.sql) para agregar `category` y `category_slug`.
+- Ejecuta [supabase-phase2-catalog.sql](supabase-phase2-catalog.sql) para:
+  - crear tabla `categories`
+  - crear tabla `collections`
+  - agregar `collection` y `collection_slug` en `products`
+  - sembrar categorias base
+  - migrar categorias existentes desde `products`
 
 **Mercado Pago:**
 
@@ -113,10 +130,51 @@ Si se envía `?all=true`, devuelve también productos inactivos para el panel ad
     "price": 299.99,
     "image_url": "1776975642449-alianzas.png",
     "description": "...",
+    "category": "Alianzas",
+    "category_slug": "alianzas",
+    "collection": "Clasicas",
+    "collection_slug": "clasicas",
     "active": true
   }
 ]
 ```
+
+### GET /api/categories
+
+Devuelve las categorías disponibles del catálogo. Con `?all=true` incluye también las inactivas para el panel admin.
+
+**Response:**
+
+```json
+[
+  {
+    "slug": "bebe",
+    "name": "Coleccion Bebe",
+    "description": "Caravanas y joyas delicadas para bebe.",
+    "active": true,
+    "sort_order": 0
+  },
+  {
+    "slug": "alianzas",
+    "name": "Alianzas",
+    "description": "Anillos y alianzas para compromiso, boda o regalo.",
+    "active": true,
+    "sort_order": 1
+  }
+]
+```
+
+### POST /api/categories
+
+Crea una categoría con `slug`, `name`, `description`, `active` y `sort_order`.
+
+### PUT /api/categories/:slug
+
+Actualiza una categoría y propaga cambios de `slug`/`name` a productos y colecciones asociadas.
+
+### DELETE /api/categories/:slug
+
+Elimina una categoría si no tiene productos ni colecciones asociadas.
 
 ### POST /api/upload-image
 
@@ -137,6 +195,37 @@ Sube una imagen de producto a Supabase Storage usando `SUPABASE_SERVICE_ROLE_KEY
 }
 ```
 
+### GET /api/collections
+
+Devuelve las colecciones disponibles. Soporta `?all=true` y `?category_slug=...`.
+
+**Response:**
+
+```json
+[
+  {
+    "slug": "abridores",
+    "name": "Abridores",
+    "description": "Modelos clasicos para bebes y niñas.",
+    "category_slug": "bebe",
+    "active": true,
+    "sort_order": 0
+  }
+]
+```
+
+### POST /api/collections
+
+Crea una colección con `slug`, `name`, `description`, `category_slug`, `active` y `sort_order`.
+
+### PUT /api/collections/:slug
+
+Actualiza una colección y propaga cambios a los productos asociados.
+
+### DELETE /api/collections/:slug
+
+Elimina una colección si no tiene productos asociados.
+
 ### POST /api/products
 
 Crea un producto en la tabla `products`.
@@ -149,6 +238,10 @@ Crea un producto en la tabla `products`.
   "price": 250,
   "image_url": "1776975642449-alianzas.png",
   "description": "Par de alianzas de oro",
+  "category": "Alianzas",
+  "category_slug": "alianzas",
+  "collection": "Clasicas",
+  "collection_slug": "clasicas",
   "active": true
 }
 ```
@@ -227,13 +320,23 @@ Acceso en `http://localhost:3001/dashboard` (o producción)
 El frontend en `../lunaperla` consume estos endpoints para el panel `/admin`:
 
 - `GET /api/products?all=true`
-- `POST /api/upload-image`
 - `POST /api/products`
 - `PUT /api/products/:id`
 - `DELETE /api/products/:id`
+- `GET /api/categories?all=true`
+- `POST /api/categories`
+- `PUT /api/categories/:slug`
+- `DELETE /api/categories/:slug`
+- `GET /api/collections?all=true`
+- `POST /api/collections`
+- `PUT /api/collections/:slug`
+- `DELETE /api/collections/:slug`
+- `POST /api/upload-image`
 
 Detalles importantes:
 
+- El home del frontend arma el catalogo por categorias usando `GET /api/products` + `GET /api/categories`.
+- El panel admin usa tres superficies separadas: productos, categorias y colecciones.
 - La base guarda en `products.image_url` solo el path del objeto en Storage, no la URL pública completa.
 - El frontend normaliza ese path usando su `VITE_SUPABASE_STORAGE_PUBLIC_BASE_URL`.
 - La subida a Storage se hace solo desde backend con `SUPABASE_SERVICE_ROLE_KEY`.
@@ -263,13 +366,15 @@ RESEND_API_KEY=re_...
 ### Checklist Pre-Producción
 
 - [ ] Configurar Supabase y ejecutar `supabase-schema.sql`
+- [ ] Ejecutar `supabase-categories-migration.sql` si tu tabla `products` es previa a categorias
+- [ ] Ejecutar `supabase-phase2-catalog.sql` para categorias y colecciones reales
 - [ ] Crear bucket `products` en Supabase Storage
 - [ ] Configurar `SUPABASE_SERVICE_ROLE_KEY`
 - [ ] Crear trigger de `updated_at` para `products`
 - [ ] Configurar webhook en Mercado Pago (URL: `https://tu-backend/api/webhook`)
 - [ ] Establecer variables de entorno en producción
 - [ ] Probar flujo completo de pago
-- [ ] Probar CRUD de productos e imágenes desde `/admin`
+- [ ] Probar CRUD de productos, categorias y colecciones desde `/admin`
 - [ ] Verificar emails se envíen correctamente
 - [ ] Monitorear órdenes en dashboard
 

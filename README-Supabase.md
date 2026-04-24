@@ -1,35 +1,38 @@
 # Supabase - Configuración y Esquema de Base de Datos
 
-Backend Luna Gold usa Supabase como base de datos PostgreSQL escalable y gratuita.
+Backend Luna Gold usa Supabase como base de datos PostgreSQL y Storage para imágenes.
 
 ## 🚀 Setup Inicial
 
 ### 1. Crear Proyecto
 
 1. Ve a [supabase.com](https://supabase.com)
-2. Crea una cuenta (GitHub o email)
-3. Nuevo proyecto → Selecciona región más cercana
-4. Espera configuración (2-3 minutos)
+2. Crea una cuenta
+3. Crea un proyecto nuevo en la región más cercana
 
-### 2. Ejecutar Script SQL
+### 2. Ejecutar migraciones SQL
 
-1. Abre **SQL Editor** en tu proyecto
-2. Copia todo el contenido de `supabase-schema.sql`
-3. Pega en SQL Editor
-4. Click en **Run** o presiona `Cmd + Enter`
+En **SQL Editor**, ejecutar en este orden:
 
-Las tablas `orders` y `products` se crearán automáticamente.
+1. `supabase-schema.sql`
+2. `supabase-categories-migration.sql` (solo si tu tabla `products` ya existía sin categorías)
+3. `supabase-phase2-catalog.sql` (categorías y colecciones reales)
 
-### 3. Obtener Credenciales
+Resultado esperado:
 
-1. Ve a **Settings** → **API**
-2. Copia:
-   - **Project URL** → `SUPABASE_URL`
-   - **anon/public key** → `SUPABASE_ANON_KEY`
+- tablas base: `orders`, `products`
+- catálogo fase 2: `categories`, `collections`
+- columnas nuevas en `products`: `category`, `category_slug`, `collection`, `collection_slug`
 
-- **service_role key** → `SUPABASE_SERVICE_ROLE_KEY`
+### 3. Obtener credenciales
 
-3. Pega en tu `.env` local
+En **Settings > API**:
+
+- Project URL -> `SUPABASE_URL`
+- anon/public key -> `SUPABASE_ANON_KEY`
+- service_role key -> `SUPABASE_SERVICE_ROLE_KEY`
+
+Configurar en `.env`:
 
 ```env
 SUPABASE_URL=https://tu-proyecto.supabase.co
@@ -40,21 +43,21 @@ SUPABASE_STORAGE_BUCKET=products
 
 ### 4. Storage para imágenes de productos
 
-1. Crear bucket público `products` en Supabase Storage.
-2. El backend sube imágenes usando `SUPABASE_SERVICE_ROLE_KEY`.
-3. En la tabla `products`, la columna `image_url` guarda el path del objeto dentro del bucket, por ejemplo:
+1. Crear bucket público `products`
+2. El backend sube imágenes con `SUPABASE_SERVICE_ROLE_KEY`
+3. `products.image_url` guarda el path del objeto, por ejemplo:
 
 ```text
 1776975642449-alianzas.png
 ```
 
-No se guarda la URL pública completa; el frontend la reconstruye usando su base pública de Storage.
+No se guarda URL pública completa; el frontend la reconstruye con su base pública de Storage.
 
 ## 📊 Esquema de Tablas
 
 ### Tabla `orders`
 
-Almacena todas las compras y sus estados de pago.
+Almacena compras y estados de pago.
 
 | Campo                 | Tipo      | Descripción                         |
 | --------------------- | --------- | ----------------------------------- |
@@ -73,42 +76,81 @@ Almacena todas las compras y sus estados de pago.
 | `created_at`          | TIMESTAMP | Fecha de creación                   |
 | `updated_at`          | TIMESTAMP | Última actualización                |
 
-**Índices:**
+Índices:
 
-- `idx_orders_status` - Búsquedas rápidas por estado
-- `idx_orders_created_at` - Ordenes más recientes primero
-- `idx_orders_payment_id` - Búsquedas por pago
+- `idx_orders_status`
+- `idx_orders_created_at`
+- `idx_orders_payment_id`
 
 ### Tabla `products`
 
-Catálogo de productos para la tienda.
+Catálogo de productos de la tienda.
 
-| Campo         | Tipo      | Descripción                    |
-| ------------- | --------- | ------------------------------ |
-| `id`          | UUID      | ID único (autogenerado)        |
-| `name`        | TEXT      | Nombre del producto            |
-| `price`       | DECIMAL   | Precio en USD                  |
-| `description` | TEXT      | Descripción larga              |
-| `image_url`   | TEXT      | Path del archivo en Storage    |
-| `active`      | BOOLEAN   | Visible en tienda (true/false) |
-| `created_at`  | TIMESTAMP | Fecha creación                 |
-| `updated_at`  | TIMESTAMP | Última actualización           |
+| Campo             | Tipo      | Descripción                    |
+| ----------------- | --------- | ------------------------------ |
+| `id`              | UUID      | ID único (autogenerado)        |
+| `name`            | TEXT      | Nombre del producto            |
+| `price`           | DECIMAL   | Precio en USD                  |
+| `description`     | TEXT      | Descripción                    |
+| `image_url`       | TEXT      | Path del archivo en Storage    |
+| `category`        | TEXT      | Nombre de categoría visible    |
+| `category_slug`   | TEXT      | Slug de categoría              |
+| `collection`      | TEXT      | Nombre de colección (opcional) |
+| `collection_slug` | TEXT      | Slug de colección (opcional)   |
+| `active`          | BOOLEAN   | Visible en tienda              |
+| `created_at`      | TIMESTAMP | Fecha creación                 |
+| `updated_at`      | TIMESTAMP | Última actualización           |
 
-**Índices:**
+Índices:
 
-- `idx_products_active` - Filtrar productos activos
-- `idx_products_created_at` - Productos más nuevos primero
+- `idx_products_active`
+- `idx_products_created_at`
+- `idx_products_category_slug`
+- `idx_products_collection_slug`
 
-**Políticas RLS:**
+### Tabla `categories`
 
-- Lectura pública para todos
-- Escritura gestionada desde backend con `SUPABASE_SERVICE_ROLE_KEY`
+Categorías administrables del catálogo.
 
-## 🕒 Trigger para `updated_at` en products
+| Campo         | Tipo      | Descripción                  |
+| ------------- | --------- | ---------------------------- |
+| `slug`        | TEXT      | PK y slug único              |
+| `name`        | TEXT      | Nombre público               |
+| `description` | TEXT      | Descripción para Home/Admin  |
+| `active`      | BOOLEAN   | Activa para catálogo público |
+| `sort_order`  | INTEGER   | Orden de visualización       |
+| `created_at`  | TIMESTAMP | Fecha creación               |
+| `updated_at`  | TIMESTAMP | Última actualización         |
 
-Se recomienda crear un trigger en Supabase para que `updated_at` se actualice automáticamente en cada `UPDATE` sobre `products`.
+Índices:
 
-Script seguro e idempotente:
+- `idx_categories_active`
+- `idx_categories_sort_order`
+
+### Tabla `collections`
+
+Colecciones opcionales asociadas a una categoría.
+
+| Campo           | Tipo      | Descripción                  |
+| --------------- | --------- | ---------------------------- |
+| `slug`          | TEXT      | PK y slug único              |
+| `name`          | TEXT      | Nombre público               |
+| `description`   | TEXT      | Descripción                  |
+| `category_slug` | TEXT      | FK a `categories.slug`       |
+| `active`        | BOOLEAN   | Activa para catálogo público |
+| `sort_order`    | INTEGER   | Orden de visualización       |
+| `created_at`    | TIMESTAMP | Fecha creación               |
+| `updated_at`    | TIMESTAMP | Última actualización         |
+
+Índices:
+
+- `idx_collections_active`
+- `idx_collections_category_slug`
+- `idx_collections_sort_order`
+
+## 🕒 Trigger para `updated_at`
+
+Si `update_updated_at_column()` no existe, créala primero:
 
 ```sql
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -120,118 +162,87 @@ BEGIN
   RETURN NEW;
 END;
 $$;
-
-DO $$
-BEGIN
-  IF EXISTS (
-    SELECT 1
-    FROM pg_trigger t
-    JOIN pg_class c ON c.oid = t.tgrelid
-    WHERE t.tgname = 'update_products_updated_at'
-      AND c.relname = 'products'
-      AND NOT t.tgisinternal
-  ) THEN
-    DROP TRIGGER update_products_updated_at ON products;
-  END IF;
-
-  CREATE TRIGGER update_products_updated_at
-  BEFORE UPDATE ON products
-  FOR EACH ROW
-  EXECUTE FUNCTION update_updated_at_column();
-END;
-$$;
 ```
 
-## 🔒 Seguridad (RLS)
+Luego crear triggers idempotentes para:
 
-Row Level Security está habilitado en ambas tablas:
+- `products` (`update_products_updated_at`)
+- `categories` (`update_categories_updated_at`)
+- `collections` (`update_collections_updated_at`)
 
-- **orders:** Acceso completo para API (verificado por backend)
-- **products:** Lectura pública; create/update/delete se ejecutan desde backend con service role
+Nota: `supabase-phase2-catalog.sql` ya intenta crear triggers para `categories` y `collections` cuando la función existe.
 
-Todos los datos sensibles se validan en el backend antes de guardar.
+## 🔒 Seguridad
 
-## 🖼️ Ciclo de vida de imágenes de productos
+- El backend usa `SUPABASE_SERVICE_ROLE_KEY` para operaciones de escritura.
+- Validación de datos y reglas de negocio se hacen en backend.
+- Para `orders` y `products`, el esquema base incluye RLS habilitado.
+- Si decides exponer acceso directo a `categories`/`collections`, agrega políticas RLS explícitas.
 
-El backend implementa estas reglas:
+## 🖼️ Ciclo de vida de imágenes
 
-- Al subir una imagen, se genera un nombre único en el bucket.
-- Al crear un producto, si el insert falla, la imagen recién subida se elimina.
-- Al editar un producto y cambiar su imagen, la imagen anterior se elimina del bucket.
-- Al eliminar un producto, también se elimina su imagen asociada.
+Reglas implementadas en backend:
 
-Esto evita archivos huérfanos en Storage.
+- al subir imagen se genera nombre único
+- si falla create de producto, se elimina imagen recién subida
+- al cambiar imagen en update, se elimina la anterior
+- al borrar producto, se elimina su imagen
 
-## 📈 Uso desde Node.js
-
-Backend ya está configurado. Ejemplos de uso:
+## 📈 Ejemplos de uso con Supabase JS
 
 ```javascript
-// Obtener productos activos
-const { data } = await supabase
+// Productos activos
+const { data: products } = await supabase
   .from("products")
-  .select("id, name, price, image_url")
+  .select("id, name, price, image_url, category, category_slug")
   .eq("active", true);
 
-// Guardar orden
-await supabase.from("orders").insert([
-  {
-    id: "LP-123456",
-    product: "Anillo Gold",
-    price: 299.99,
-    status: "pending",
-  },
-]);
+// Categorías activas
+const { data: categories } = await supabase
+  .from("categories")
+  .select("slug, name, active, sort_order")
+  .eq("active", true)
+  .order("sort_order", { ascending: true });
 
-// Actualizar estado
-await supabase
-  .from("orders")
-  .update({ status: "approved" })
-  .eq("id", "LP-123456");
+// Colecciones de una categoría
+const { data: collections } = await supabase
+  .from("collections")
+  .select("slug, name, category_slug, active")
+  .eq("category_slug", "bebe")
+  .eq("active", true);
 ```
-
-## 💾 Monitorear Datos
-
-Desde Supabase Dashboard:
-
-1. **Table Editor** - Ver/editar datos manualmente
-2. **SQL Editor** - Queries personalizadas
-3. **Logs** - Errores y actividad
-4. **Backups** - Descargar datos
-
-## 🎯 Beneficios
-
-✅ **Gratuito** - Plan suficiente para pequeños negocios  
-✅ **Escalable** - Crece con tu negocio  
-✅ **PostgreSQL Real** - No limitaciones de base de datos  
-✅ **Seguro** - Encriptación, RLS, backups automáticos  
-✅ **Rest API** - APIs automáticas para todos los datos  
-✅ **Soporte** - Documentación y comunidad activa
 
 ## 📞 Troubleshooting
 
 **"SUPABASE_URL o SUPABASE_ANON_KEY no están definidas"**
 
-- Verifica que el `.env` tenga exactamente esos nombres
-- No hay espacios antes/después del `=`
+- revisa nombres exactos en `.env`
+- sin espacios alrededor de `=`
 
 **Conexión rechazada**
 
-- Verifica que el URL y Key sean correctos
-- El proyecto está activo en Supabase
+- valida URL y keys
+- confirma proyecto activo en Supabase
 
-**Tabla no existe**
+**Tabla o columna no existe**
 
-- Ejecuta `supabase-schema.sql` completo
-- Verifica en SQL Editor que se creó exitosamente
+- ejecuta `supabase-schema.sql`
+- ejecuta `supabase-categories-migration.sql` si aplica
+- ejecuta `supabase-phase2-catalog.sql`
+
+**Error de backend sobre catálogo faltante**
+
+- mensaje típico: faltan columnas o tablas del catálogo
+- causa: no se ejecutó migración fase 2
+- solución: correr `supabase-phase2-catalog.sql`
 
 **No actualiza `updated_at`**
 
-- Verifica que el trigger `update_products_updated_at` exista sobre `products`
-- Prueba un `UPDATE` manual desde SQL Editor
+- verifica trigger correspondiente en cada tabla
+- prueba `UPDATE` manual en SQL Editor
 
 **Las imágenes no aparecen en frontend**
 
-- Verifica que `image_url` guarde solo el path del archivo
-- Verifica que el bucket sea `products`
-- Verifica `VITE_SUPABASE_STORAGE_PUBLIC_BASE_URL` en el frontend
+- `image_url` debe guardar solo path
+- bucket debe ser `products`
+- revisa `VITE_SUPABASE_STORAGE_PUBLIC_BASE_URL` en frontend
