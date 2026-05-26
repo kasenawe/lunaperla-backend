@@ -1,7 +1,6 @@
 const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
-const { env } = require("./config/env");
 const {
   supabase,
   supabaseAdmin,
@@ -32,7 +31,6 @@ const { registerApiRoutes } = require("./routes");
 const { createViewsRouter } = require("./views");
 
 const app = express();
-const PORT = env.PORT;
 
 if (!resend) {
   console.warn("⚠️ RESEND_API_KEY no configurada - emails no se enviarán");
@@ -674,4 +672,4 @@ app.get("/api/health", (_req, res) => {
 
 app.use(notFound);
 app.use(errorHandler);
-module.exports = { app, PORT };
+module.exports = { app };
