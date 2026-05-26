@@ -672,4 +672,5 @@ app.get("/api/health", (_req, res) => {
 
 app.use(notFound);
 app.use(errorHandler);
-module.exports = { app };
+module.exports = app;
+module.exports.default = app;
