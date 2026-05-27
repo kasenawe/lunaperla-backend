@@ -2,8 +2,12 @@ const { createPublicRoutes } = require("./publicRoutes");
 const { createAdminRoutes } = require("./adminRoutes");
 const { createPaymentRoutes } = require("./paymentRoutes");
 const { createDashboardRoutes } = require("./dashboardRoutes");
+const { createAuthRoutes } = require("./authRoutes");
+const requireAuth = require("../middlewares/requireAuth");
 
 function registerApiRoutes(app, deps) {
+  app.use("/api", createAuthRoutes());
+
   app.use(
     "/api",
     createPublicRoutes({
@@ -26,6 +30,7 @@ function registerApiRoutes(app, deps) {
 
   app.use(
     "/api",
+    requireAuth,
     createAdminRoutes({
       supabase: deps.supabase,
       slugifyValue: deps.slugifyValue,
@@ -47,6 +52,7 @@ function registerApiRoutes(app, deps) {
 
   app.use(
     "/api",
+    requireAuth,
     createDashboardRoutes({
       getAllOrders: deps.getAllOrders,
       getOrderById: deps.getOrderById,

@@ -67,7 +67,6 @@ function createDashboardRoutes({
       };
 
       console.log("🔍 Probando envío de email a:", testOrder.customer_email);
-      console.log("🔑 Resend configurado:", !!resend);
 
       await sendConfirmationEmail(testOrder);
       res.json({ success: true, message: "Email de prueba enviado" });
