@@ -16,6 +16,35 @@ lunaperla/           # Frontend (React + Vite)
 lunaperla-backend/   # Backend (Node.js + Express) ← Estás aquí
 ```
 
+### Arquitectura Modular (actual)
+
+```text
+src/
+  app.js                 # Crea y configura Express (sin listen)
+  server.js              # Entry point local (app.listen)
+  config/
+    env.js               # Variables de entorno centralizadas
+  clients/
+    supabaseClient.js
+    mercadoPagoClient.js
+    resendClient.js
+  routes/
+    index.js             # Registro central de rutas API
+    publicRoutes.js
+    adminRoutes.js
+    paymentRoutes.js
+    dashboardRoutes.js
+  views/
+    index.js             # Rutas HTML (dashboard)
+  middlewares/
+    notFound.js
+    errorHandler.js
+  utils/
+    slug.js
+    catalog.js
+    storage.js
+```
+
 ## 📋 Requisitos
 
 - Node.js v16+
@@ -349,6 +378,12 @@ Detalles importantes:
 1. Conectar repo a Vercel
 2. Configurar variables de entorno en Settings → Environment Variables
 3. URLs deben ser HTTPS (obligatorio para Mercado Pago)
+
+Nota de runtime:
+
+- Para Serverless Functions en Vercel, usa `src/app.js` como entrada.
+- `src/app.js` exporta directamente la app de Express.
+- `src/server.js` queda para ejecución local (`npm start`/`npm run dev`).
 
 **Variables requeridas:**
 
