@@ -342,7 +342,56 @@ Acceso en `http://localhost:3001/dashboard` (o producción)
 - Estados visuales (colores: amarillo, verde, rojo)
 - Auto-refresh cada 30 segundos
 - Responsive (móvil + desktop)
-- No requiere login
+- Protegido por JWT (Bearer token)
+
+## 🔐 Autenticación JWT (Admin)
+
+### POST /api/auth/login
+
+Devuelve un `accessToken` para consumir endpoints administrativos.
+
+**Body:**
+
+```json
+{
+  "username": "admin",
+  "password": "tu-password"
+}
+```
+
+**Response:**
+
+```json
+{
+  "accessToken": "eyJ...",
+  "tokenType": "Bearer",
+  "expiresIn": "12h"
+}
+```
+
+Usar el token en rutas protegidas con header:
+
+```text
+Authorization: Bearer <accessToken>
+```
+
+Rutas protegidas:
+
+- `/api/products?all=true`
+- `POST /api/products`
+- `PUT /api/products/:id`
+- `DELETE /api/products/:id`
+- `POST /api/upload-image`
+- `POST /api/categories`
+- `PUT /api/categories/:slug`
+- `DELETE /api/categories/:slug`
+- `POST /api/collections`
+- `PUT /api/collections/:slug`
+- `DELETE /api/collections/:slug`
+- `GET /api/orders`
+- `GET /api/orders/:orderId`
+- `GET /api/dashboard/stats`
+- `POST /api/test-email`
 
 ## 🛍️ Integración con Panel Admin Frontend
 
@@ -393,6 +442,10 @@ SUPABASE_ANON_KEY=...
 SUPABASE_SERVICE_ROLE_KEY=...
 SUPABASE_STORAGE_BUCKET=products
 MERCADO_PAGO_ACCESS_TOKEN=APP_USR-...
+JWT_SECRET=una-clave-larga-y-segura
+JWT_EXPIRES_IN=12h
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=cambiar-esta-password
 FRONTEND_URL=https://tu-dominio.vercel.app
 BACKEND_URL=https://tu-backend.vercel.app
 RESEND_API_KEY=re_...
