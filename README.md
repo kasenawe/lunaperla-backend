@@ -2,6 +2,12 @@
 
 API backend con integración completa: pagos, persistencia en Supabase, emails automáticos, dashboard y soporte administrativo para productos, categorias y colecciones.
 
+Actualización reciente:
+
+- `products.product_code` para código interno/SKU de producto
+- `orders.product_code` para trazabilidad en pedidos
+- restricción de unicidad en `products.product_code` (permite `NULL`)
+
 La estructura de catalogo ya soporta:
 
 - categorias reales en tabla `categories`
@@ -126,6 +132,7 @@ Crear preferencia de pago en Mercado Pago y guardar orden en Supabase.
 {
   "product": {
     "name": "Canasta trenzada",
+    "product_code": "LP-CAN-001",
     "price": 299,
     "description": "Descripción del producto"
   },
@@ -156,6 +163,7 @@ Si se envía `?all=true`, devuelve también productos inactivos para el panel ad
   {
     "id": "uuid",
     "name": "Anillo Luna Gold",
+    "product_code": "LP-ANI-001",
     "price": 299.99,
     "image_url": "1776975642449-alianzas.png",
     "description": "...",
@@ -264,6 +272,7 @@ Crea un producto en la tabla `products`.
 ```json
 {
   "name": "Alianzas",
+  "product_code": "LP-ALI-001",
   "price": 250,
   "image_url": "1776975642449-alianzas.png",
   "description": "Par de alianzas de oro",
@@ -274,6 +283,12 @@ Crea un producto en la tabla `products`.
   "active": true
 }
 ```
+
+Notas:
+
+- `product_code` es opcional.
+- Si se envía, debe ser único entre productos.
+- Si existe un duplicado, la API responde `409` con el mensaje: `Ya existe un producto con ese código de producto`.
 
 Si la creación falla después de subir una imagen, el backend intenta eliminar esa imagen para evitar archivos huérfanos.
 
@@ -339,6 +354,7 @@ Acceso en `http://localhost:3001/dashboard` (o producción)
 
 - Estadísticas en tiempo real: Total pedidos, pendientes, aprobados, ingresos
 - Tabla con últimos 20 pedidos
+- Incluye columna de `Codigo` (valor de `orders.product_code`)
 - Estados visuales (colores: amarillo, verde, rojo)
 - Auto-refresh cada 30 segundos
 - Responsive (móvil + desktop)

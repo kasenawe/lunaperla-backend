@@ -2,6 +2,7 @@
 CREATE TABLE orders (
   id TEXT PRIMARY KEY,
   product TEXT NOT NULL,
+  product_code TEXT,
   price DECIMAL(10,2) NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending',
   customer_name TEXT,
@@ -19,6 +20,7 @@ CREATE TABLE orders (
 CREATE INDEX idx_orders_status ON orders(status);
 CREATE INDEX idx_orders_created_at ON orders(created_at DESC);
 CREATE INDEX idx_orders_payment_id ON orders(payment_id);
+CREATE INDEX IF NOT EXISTS idx_orders_product_code ON orders(product_code);
 
 -- Políticas RLS (Row Level Security) - opcional pero recomendado
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
@@ -28,12 +30,16 @@ CREATE POLICY "Allow all operations for authenticated users" ON orders
 FOR ALL USING (true);
 
 -- Agregar columna preference_id
-ALTER TABLE orders ADD COLUMN preference_id TEXT;
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS preference_id TEXT;
+
+-- Agregar columna product_code
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS product_code TEXT;
 
 -- Crear tabla products
 CREATE TABLE products (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   name TEXT NOT NULL,
+  product_code TEXT,
   price DECIMAL(10,2) NOT NULL,
   description TEXT,
   image_url TEXT,
@@ -48,6 +54,12 @@ CREATE TABLE products (
 CREATE INDEX idx_products_active ON products(active);
 CREATE INDEX idx_products_category_slug ON products(category_slug);
 CREATE INDEX idx_products_created_at ON products(created_at DESC);
+DROP INDEX IF EXISTS idx_products_product_code;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_products_product_code ON products(product_code)
+WHERE product_code IS NOT NULL;
+
+-- Agregar columna product_code en products
+ALTER TABLE products ADD COLUMN IF NOT EXISTS product_code TEXT;
 
 -- Políticas RLS
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;

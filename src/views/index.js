@@ -68,6 +68,7 @@ function createViewsRouter({ getAllOrders }) {
                           <tr>
                               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
                               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Producto</th>
+                              <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Codigo</th>
                               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cliente</th>
                               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Precio</th>
                               <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
@@ -82,6 +83,7 @@ function createViewsRouter({ getAllOrders }) {
                               <tr>
                                   <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-900">${order.id.substring(0, 12)}...</td>
                                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${order.product}</td>
+                                  <td class="px-6 py-4 whitespace-nowrap text-sm font-mono text-gray-700">${order.product_code || "-"}</td>
                                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${order.customer_name}</td>
                                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">USD ${order.price}</td>
                                   <td class="px-6 py-4 whitespace-nowrap">

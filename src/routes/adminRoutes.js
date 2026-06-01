@@ -20,6 +20,20 @@ function createAdminRoutes({
 }) {
   const router = express.Router();
 
+  function isProductCodeUniqueViolation(error) {
+    if (!error || error.code !== "23505") {
+      return false;
+    }
+
+    const errorMessage = String(error.message || "");
+    const errorDetail = String(error.details || "");
+
+    return (
+      errorMessage.includes("uq_products_product_code") ||
+      errorDetail.includes("product_code")
+    );
+  }
+
   router.post("/categories", async (req, res) => {
     try {
       const payload = normalizeCategoryRecord(req.body);
@@ -336,7 +350,8 @@ function createAdminRoutes({
 
   router.post("/products", async (req, res) => {
     try {
-      const { name, price, image_url, description, active } = req.body;
+      const { name, price, image_url, description, active, product_code } =
+        req.body;
       const catalogData = await resolveProductCatalogPayload(req.body);
 
       if (!name || price === undefined || !image_url || !description) {
@@ -348,6 +363,10 @@ function createAdminRoutes({
         .insert([
           {
             name,
+            product_code:
+              typeof product_code === "string" && product_code.trim()
+                ? product_code.trim()
+                : null,
             price,
             image_url,
             description,
@@ -362,6 +381,12 @@ function createAdminRoutes({
         .single();
 
       if (error) {
+        if (isProductCodeUniqueViolation(error)) {
+          return res.status(409).json({
+            error: "Ya existe un producto con ese código de producto",
+          });
+        }
+
         if (isMissingCatalogColumn(error) || isMissingCatalogRelation(error)) {
           return res.status(400).json({
             error:
@@ -391,7 +416,8 @@ function createAdminRoutes({
   router.put("/products/:id", async (req, res) => {
     try {
       const { id } = req.params;
-      const { name, price, image_url, description, active } = req.body;
+      const { name, price, image_url, description, active, product_code } =
+        req.body;
       const catalogData = await resolveProductCatalogPayload(req.body);
 
       if (!name || price === undefined || !image_url || !description) {
@@ -416,6 +442,10 @@ function createAdminRoutes({
         .from("products")
         .update({
           name,
+          product_code:
+            typeof product_code === "string" && product_code.trim()
+              ? product_code.trim()
+              : null,
           price,
           image_url,
           description,
@@ -430,6 +460,12 @@ function createAdminRoutes({
         .maybeSingle();
 
       if (error) {
+        if (isProductCodeUniqueViolation(error)) {
+          return res.status(409).json({
+            error: "Ya existe un producto con ese código de producto",
+          });
+        }
+
         if (isMissingCatalogColumn(error) || isMissingCatalogRelation(error)) {
           return res.status(400).json({
             error:

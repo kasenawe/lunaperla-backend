@@ -88,7 +88,7 @@ function createPaymentRoutes({ saveOrder, updateOrderStatus }) {
       res.json({
         id: result.id,
         init_point: result.init_point,
-        orderId: result.id,
+        orderId,
       });
     } catch (error) {
       console.error("Error creando preferencia:", error);

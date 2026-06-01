@@ -17,7 +17,7 @@ function createPublicRoutes({
       let query = supabase
         .from("products")
         .select(
-          "id, name, price, image_url, description, active, category, category_slug, collection, collection_slug",
+          "id, name, price, image_url, description, product_code, active, category, category_slug, collection, collection_slug",
         )
         .order("category_slug", { ascending: true })
         .order("collection_slug", { ascending: true })
@@ -33,7 +33,7 @@ function createPublicRoutes({
         let fallbackQuery = supabase
           .from("products")
           .select(
-            "id, name, price, image_url, description, active, category, category_slug",
+            "id, name, price, image_url, description, product_code, active, category, category_slug",
           )
           .order("category_slug", { ascending: true })
           .order("name", { ascending: true });

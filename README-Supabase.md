@@ -23,6 +23,9 @@ Resultado esperado:
 - tablas base: `orders`, `products`
 - catálogo fase 2: `categories`, `collections`
 - columnas nuevas en `products`: `category`, `category_slug`, `collection`, `collection_slug`
+- soporte de `product_code`:
+  - `orders.product_code` para trazabilidad de compra
+  - `products.product_code` con unicidad (cuando no es `NULL`)
 
 ### 3. Obtener credenciales
 
@@ -64,6 +67,7 @@ Almacena compras y estados de pago.
 | `id`                  | TEXT      | ID único de la orden (PK)           |
 | `preference_id`       | TEXT      | ID de Mercado Pago                  |
 | `product`             | TEXT      | Nombre del producto                 |
+| `product_code`        | TEXT      | Código/SKU del producto comprado    |
 | `price`               | DECIMAL   | Precio pagado                       |
 | `status`              | TEXT      | Estado: pending, approved, rejected |
 | `customer_name`       | TEXT      | Nombre del cliente                  |
@@ -81,6 +85,7 @@ Almacena compras y estados de pago.
 - `idx_orders_status`
 - `idx_orders_created_at`
 - `idx_orders_payment_id`
+- `idx_orders_product_code`
 
 ### Tabla `products`
 
@@ -90,6 +95,7 @@ Catálogo de productos de la tienda.
 | ----------------- | --------- | ------------------------------ |
 | `id`              | UUID      | ID único (autogenerado)        |
 | `name`            | TEXT      | Nombre del producto            |
+| `product_code`    | TEXT      | Código/SKU interno (opcional)  |
 | `price`           | DECIMAL   | Precio en USD                  |
 | `description`     | TEXT      | Descripción                    |
 | `image_url`       | TEXT      | Path del archivo en Storage    |
@@ -106,7 +112,12 @@ Catálogo de productos de la tienda.
 - `idx_products_active`
 - `idx_products_created_at`
 - `idx_products_category_slug`
-- `idx_products_collection_slug`
+- `uq_products_product_code` (índice único parcial)
+
+Regla de unicidad de `products.product_code`:
+
+- permite valores `NULL`
+- cuando tiene valor, no puede repetirse
 
 ### Tabla `categories`
 

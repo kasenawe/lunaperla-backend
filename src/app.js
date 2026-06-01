@@ -312,6 +312,12 @@ async function removeStorageObject(imageValue) {
 // Funciones helper para Supabase
 async function saveOrder(orderData) {
   try {
+    const productCode =
+      orderData?.product?.product_code ||
+      orderData?.product?.code ||
+      orderData?.product?.sku ||
+      null;
+
     const { data, error } = await supabase
       .from("orders")
       .insert([
@@ -325,6 +331,7 @@ async function saveOrder(orderData) {
           customer_phone: orderData.customerData.phone || "",
           customer_email: orderData.customerData.email || "",
           product_description: orderData.product.description || "",
+          product_code: productCode,
           init_point: orderData.initPoint,
           created_at: new Date().toISOString(),
         },
