@@ -318,24 +318,24 @@ async function saveOrder(orderData) {
       orderData?.product?.sku ||
       null;
 
+    const orderInsertPayload = {
+      id: orderData.orderId, // Usamos el mismo ID que en Mercado Pago para tracking
+      preference_id: orderData.preferenceId,
+      product: orderData.product.name,
+      price: orderData.amount,
+      status: "pending",
+      customer_name: orderData.customerData.name || "",
+      customer_phone: orderData.customerData.phone || "",
+      customer_email: orderData.customerData.email || "",
+      product_description: orderData.product.description || "",
+      product_code: productCode,
+      init_point: orderData.initPoint,
+      created_at: new Date().toISOString(),
+    };
+
     const { data, error } = await supabase
       .from("orders")
-      .insert([
-        {
-          id: orderData.orderId, // Usamos el mismo ID que en Mercado Pago para tracking
-          preference_id: orderData.preferenceId,
-          product: orderData.product.name,
-          price: orderData.amount,
-          status: "pending",
-          customer_name: orderData.customerData.name || "",
-          customer_phone: orderData.customerData.phone || "",
-          customer_email: orderData.customerData.email || "",
-          product_description: orderData.product.description || "",
-          product_code: productCode,
-          init_point: orderData.initPoint,
-          created_at: new Date().toISOString(),
-        },
-      ])
+      .insert([orderInsertPayload])
       .select();
 
     if (error) {
