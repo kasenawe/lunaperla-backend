@@ -317,6 +317,9 @@ async function saveOrder(orderData) {
       orderData?.product?.code ||
       orderData?.product?.sku ||
       null;
+    const variant = orderData?.productVariant || null;
+    const variantCode =
+      variant?.sku || variant?.product_code || variant?.code || null;
 
     const orderInsertPayload = {
       id: orderData.orderId, // Usamos el mismo ID que en Mercado Pago para tracking
@@ -329,6 +332,20 @@ async function saveOrder(orderData) {
       customer_email: orderData.customerData.email || "",
       product_description: orderData.product.description || "",
       product_code: productCode,
+      product_variant_id: variant?.id || null,
+      product_variant_data: variant
+        ? {
+            id: variant.id || null,
+            sku: variantCode,
+            label: variant.label || null,
+            karat: variant.karat || null,
+            width_mm: variant.width_mm ?? null,
+            profile: variant.profile || null,
+            closure_type: variant.closure_type || null,
+            price: variant.price ?? null,
+            metadata: variant.metadata || {},
+          }
+        : null,
       init_point: orderData.initPoint,
       created_at: new Date().toISOString(),
     };

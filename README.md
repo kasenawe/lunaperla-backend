@@ -7,6 +7,7 @@ Actualización reciente:
 - `products.product_code` para código interno/SKU de producto
 - `orders.product_code` para trazabilidad en pedidos
 - restricción de unicidad en `products.product_code` (permite `NULL`)
+- soporte inicial para variantes de producto mediante `product_variants`
 
 La estructura de catalogo ya soporta:
 
@@ -291,6 +292,11 @@ Notas:
 - Si existe un duplicado, la API responde `409` con el mensaje: `Ya existe un producto con ese código de producto`.
 
 Si la creación falla después de subir una imagen, el backend intenta eliminar esa imagen para evitar archivos huérfanos.
+
+### GET /api/products
+
+Cada producto puede incluir una lista `variants` con variantes activas ordenadas por `sort_order`.
+Si la tabla `product_variants` todavía no existe, la API devuelve el producto sin variantes para mantener compatibilidad durante la migración.
 
 ### PUT /api/products/:id
 

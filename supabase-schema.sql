@@ -3,6 +3,8 @@ CREATE TABLE orders (
   id TEXT PRIMARY KEY,
   product TEXT NOT NULL,
   product_code TEXT,
+  product_variant_id TEXT,
+  product_variant_data JSONB,
   price DECIMAL(10,2) NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending',
   customer_name TEXT,
@@ -21,6 +23,7 @@ CREATE INDEX idx_orders_status ON orders(status);
 CREATE INDEX idx_orders_created_at ON orders(created_at DESC);
 CREATE INDEX idx_orders_payment_id ON orders(payment_id);
 CREATE INDEX IF NOT EXISTS idx_orders_product_code ON orders(product_code);
+CREATE INDEX IF NOT EXISTS idx_orders_product_variant_id ON orders(product_variant_id);
 
 -- Políticas RLS (Row Level Security) - opcional pero recomendado
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
@@ -60,6 +63,29 @@ WHERE product_code IS NOT NULL;
 
 -- Agregar columna product_code en products
 ALTER TABLE products ADD COLUMN IF NOT EXISTS product_code TEXT;
+
+-- Tabla de variantes de producto
+CREATE TABLE IF NOT EXISTS product_variants (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  sku TEXT NOT NULL UNIQUE,
+  label TEXT NOT NULL,
+  karat TEXT,
+  width_mm DECIMAL(4,2),
+  profile TEXT,
+  closure_type TEXT,
+  price DECIMAL(10,2) NOT NULL,
+  active BOOLEAN NOT NULL DEFAULT true,
+  sort_order INTEGER NOT NULL DEFAULT 0,
+  metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  UNIQUE (product_id, label)
+);
+
+CREATE INDEX IF NOT EXISTS idx_product_variants_product_id ON product_variants(product_id);
+CREATE INDEX IF NOT EXISTS idx_product_variants_active ON product_variants(active);
+CREATE INDEX IF NOT EXISTS idx_product_variants_sort_order ON product_variants(sort_order);
 
 -- Políticas RLS
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;

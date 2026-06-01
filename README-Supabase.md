@@ -26,6 +26,10 @@ Resultado esperado:
 - soporte de `product_code`:
   - `orders.product_code` para trazabilidad de compra
   - `products.product_code` con unicidad (cuando no es `NULL`)
+- soporte de variantes:
+  - tabla `product_variants`
+  - cada producto puede tener una o más variantes activas
+  - la UI usa la variante seleccionada para precio y código final
 
 ### 3. Obtener credenciales
 
@@ -113,6 +117,33 @@ Catálogo de productos de la tienda.
 - `idx_products_created_at`
 - `idx_products_category_slug`
 - `uq_products_product_code` (índice único parcial)
+
+### Tabla `product_variants`
+
+Variantes vendibles asociadas a un producto base.
+
+| Campo           | Tipo      | Descripción                          |
+| --------------- | --------- | ------------------------------------ |
+| `id`            | UUID      | ID único                             |
+| `product_id`    | UUID      | FK a `products.id`                   |
+| `sku`           | TEXT      | Código único de la variante          |
+| `label`         | TEXT      | Nombre visible de la variante        |
+| `karat`         | TEXT      | Kilataje / material                  |
+| `width_mm`      | DECIMAL   | Ancho en milímetros                  |
+| `profile`       | TEXT      | Perfil: bombe, doble bombe, plano... |
+| `closure_type`  | TEXT      | Tipo de cierre o montaje             |
+| `price`         | DECIMAL   | Precio final de la variante          |
+| `active`        | BOOLEAN   | Variante visible                     |
+| `sort_order`    | INTEGER   | Orden de visualización               |
+| `metadata`      | JSONB     | Datos adicionales flexibles          |
+| `created_at`    | TIMESTAMP | Fecha creación                       |
+| `updated_at`    | TIMESTAMP | Última actualización                 |
+
+Índices:
+
+- `idx_product_variants_product_id`
+- `idx_product_variants_active`
+- `idx_product_variants_sort_order`
 
 Regla de unicidad de `products.product_code`:
 

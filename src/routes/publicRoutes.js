@@ -1,5 +1,30 @@
 const express = require("express");
 
+function normalizeProductVariant(record = {}) {
+  const metadata =
+    record.metadata && typeof record.metadata === "object"
+      ? record.metadata
+      : {};
+
+  return {
+    id: record.id,
+    product_id: record.product_id,
+    sku: record.sku,
+    label: record.label,
+    karat: record.karat ?? null,
+    width_mm:
+      record.width_mm === null || record.width_mm === undefined
+        ? null
+        : Number(record.width_mm),
+    profile: record.profile ?? null,
+    closure_type: record.closure_type ?? null,
+    price: Number(record.price),
+    active: record.active ?? true,
+    sort_order: record.sort_order ?? 0,
+    metadata,
+  };
+}
+
 function createPublicRoutes({
   supabase,
   isMissingCatalogColumn,
@@ -55,7 +80,44 @@ function createPublicRoutes({
         throw error;
       }
 
-      res.json((data || []).map((item) => mapProductResponse(item)));
+      const productIds = (data || []).map((item) => item.id).filter(Boolean);
+      let variantsByProductId = new Map();
+
+      if (productIds.length > 0) {
+        const { data: variantRows, error: variantError } = await supabase
+          .from("product_variants")
+          .select(
+            "id, product_id, sku, label, karat, width_mm, profile, closure_type, price, active, sort_order, metadata",
+          )
+          .in("product_id", productIds)
+          .order("sort_order", { ascending: true })
+          .order("label", { ascending: true });
+
+        if (variantError) {
+          if (isMissingCatalogColumn(variantError)) {
+            console.warn(
+              "⚠️ product_variants no está disponible aún; devolviendo productos sin variantes.",
+            );
+          } else {
+            throw variantError;
+          }
+        }
+
+        variantsByProductId = new Map();
+        for (const variant of variantRows || []) {
+          const normalizedVariant = normalizeProductVariant(variant);
+          const list = variantsByProductId.get(normalizedVariant.product_id) || [];
+          list.push(normalizedVariant);
+          variantsByProductId.set(normalizedVariant.product_id, list);
+        }
+      }
+
+      res.json(
+        (data || []).map((item) => ({
+          ...mapProductResponse(item),
+          variants: variantsByProductId.get(item.id) || [],
+        })),
+      );
     } catch (error) {
       console.error("Error cargando productos:", error);
       res.status(500).json({ error: "Error interno del servidor" });
