@@ -298,6 +298,26 @@ Si la creación falla después de subir una imagen, el backend intenta eliminar 
 Cada producto puede incluir una lista `variants` con variantes activas ordenadas por `sort_order`.
 Si la tabla `product_variants` todavía no existe, la API devuelve el producto sin variantes para mantener compatibilidad durante la migración.
 
+### GET /api/products/:id/variants
+
+Lista variantes de un producto (admin) ordenadas por `sort_order` y `label`.
+
+### POST /api/products/:id/variants
+
+Crea una variante para un producto.
+
+- Requiere: `sku`, `label`, `price`.
+- Opcionales: `karat`, `width_mm`, `profile`, `closure_type`, `metadata`, `sort_order`, `active`.
+- Si se repite `sku` o `label` para el mismo producto, responde `409`.
+
+### PUT /api/products/:id/variants/:variantId
+
+Actualiza una variante existente con los mismos campos del endpoint de creación.
+
+### DELETE /api/products/:id/variants/:variantId
+
+Elimina una variante existente.
+
 ### PUT /api/products/:id
 
 Actualiza un producto existente.
@@ -308,6 +328,14 @@ Actualiza un producto existente.
 ### DELETE /api/products/:id
 
 Elimina el producto y también elimina su imagen asociada del bucket, si existe.
+
+### Seed de variantes iniciales
+
+Archivo disponible: `supabase-seed-product-variants.sql`.
+
+- Genera variantes base para productos de `alianzas` (18K y 10K) que todavía no tengan variantes.
+- Genera variante base para productos de `bebe` sin variantes (incluye abridores/tix).
+- Es idempotente: no duplica variantes ya existentes.
 
 ### GET /api/orders
 

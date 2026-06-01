@@ -34,6 +34,88 @@ function createAdminRoutes({
     );
   }
 
+  function isVariantUniqueViolation(error) {
+    if (!error || error.code !== "23505") {
+      return false;
+    }
+
+    const errorMessage = String(error.message || "").toLowerCase();
+    const errorDetail = String(error.details || "").toLowerCase();
+
+    return (
+      errorMessage.includes("product_variants") ||
+      errorMessage.includes("sku") ||
+      errorDetail.includes("sku") ||
+      errorDetail.includes("label")
+    );
+  }
+
+  function normalizeVariantPayload(payload = {}) {
+    const sku =
+      typeof payload.sku === "string" ? payload.sku.trim().toUpperCase() : "";
+    const label = typeof payload.label === "string" ? payload.label.trim() : "";
+    const karat =
+      typeof payload.karat === "string" && payload.karat.trim()
+        ? payload.karat.trim().toUpperCase()
+        : null;
+    const profile =
+      typeof payload.profile === "string" && payload.profile.trim()
+        ? payload.profile.trim().toLowerCase()
+        : null;
+    const closureType =
+      typeof payload.closure_type === "string" && payload.closure_type.trim()
+        ? payload.closure_type.trim().toLowerCase()
+        : null;
+
+    const parsedPrice = Number(payload.price);
+    const parsedWidthMm =
+      payload.width_mm === "" ||
+      payload.width_mm === null ||
+      payload.width_mm === undefined
+        ? null
+        : Number(payload.width_mm);
+    const parsedSortOrder = Number(payload.sort_order);
+
+    if (!sku) {
+      throw new Error("El SKU es obligatorio");
+    }
+
+    if (!label) {
+      throw new Error("La etiqueta de la variante es obligatoria");
+    }
+
+    if (!Number.isFinite(parsedPrice) || parsedPrice <= 0) {
+      throw new Error("El precio de la variante debe ser mayor a 0");
+    }
+
+    if (
+      parsedWidthMm !== null &&
+      (!Number.isFinite(parsedWidthMm) || parsedWidthMm <= 0)
+    ) {
+      throw new Error("El ancho en mm debe ser mayor a 0");
+    }
+
+    let metadata = {};
+    if (payload.metadata && typeof payload.metadata === "object") {
+      metadata = payload.metadata;
+    }
+
+    return {
+      sku,
+      label,
+      karat,
+      width_mm: parsedWidthMm,
+      profile,
+      closure_type: closureType,
+      price: Number(parsedPrice.toFixed(2)),
+      active: payload.active ?? true,
+      sort_order: Number.isFinite(parsedSortOrder)
+        ? Math.trunc(parsedSortOrder)
+        : 0,
+      metadata,
+    };
+  }
+
   router.post("/categories", async (req, res) => {
     try {
       const payload = normalizeCategoryRecord(req.body);
@@ -570,6 +652,216 @@ function createAdminRoutes({
       res.status(204).send();
     } catch (error) {
       console.error("Error eliminando producto:", error);
+      res.status(500).json({ error: "Error interno del servidor" });
+    }
+  });
+
+  router.get("/products/:id/variants", async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const { data: productExists, error: productError } = await supabase
+        .from("products")
+        .select("id")
+        .eq("id", id)
+        .maybeSingle();
+
+      if (productError) {
+        throw productError;
+      }
+
+      if (!productExists) {
+        return res.status(404).json({ error: "Producto no encontrado" });
+      }
+
+      const { data, error } = await supabase
+        .from("product_variants")
+        .select(
+          "id, product_id, sku, label, karat, width_mm, profile, closure_type, price, active, sort_order, metadata",
+        )
+        .eq("product_id", id)
+        .order("sort_order", { ascending: true })
+        .order("label", { ascending: true });
+
+      if (error) {
+        if (isMissingCatalogColumn(error) || isMissingCatalogRelation(error)) {
+          return res.status(400).json({
+            error:
+              "Falta la tabla product_variants. Ejecuta supabase-product-variants.sql en Supabase.",
+          });
+        }
+
+        throw error;
+      }
+
+      res.json(data || []);
+    } catch (error) {
+      console.error("Error cargando variantes de producto:", error);
+      res.status(500).json({ error: "Error interno del servidor" });
+    }
+  });
+
+  router.post("/products/:id/variants", async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      const { data: productExists, error: productError } = await supabase
+        .from("products")
+        .select("id")
+        .eq("id", id)
+        .maybeSingle();
+
+      if (productError) {
+        throw productError;
+      }
+
+      if (!productExists) {
+        return res.status(404).json({ error: "Producto no encontrado" });
+      }
+
+      let payload;
+      try {
+        payload = normalizeVariantPayload(req.body);
+      } catch (validationError) {
+        return res.status(400).json({ error: validationError.message });
+      }
+
+      const { data, error } = await supabase
+        .from("product_variants")
+        .insert([
+          {
+            ...payload,
+            product_id: id,
+          },
+        ])
+        .select(
+          "id, product_id, sku, label, karat, width_mm, profile, closure_type, price, active, sort_order, metadata",
+        )
+        .single();
+
+      if (error) {
+        if (isVariantUniqueViolation(error)) {
+          return res.status(409).json({
+            error: "Ya existe una variante con ese SKU o etiqueta",
+          });
+        }
+
+        if (isMissingCatalogColumn(error) || isMissingCatalogRelation(error)) {
+          return res.status(400).json({
+            error:
+              "Falta la tabla product_variants. Ejecuta supabase-product-variants.sql en Supabase.",
+          });
+        }
+
+        throw error;
+      }
+
+      res.status(201).json(data);
+    } catch (error) {
+      console.error("Error creando variante de producto:", error);
+      res.status(500).json({ error: "Error interno del servidor" });
+    }
+  });
+
+  router.put("/products/:id/variants/:variantId", async (req, res) => {
+    try {
+      const { id, variantId } = req.params;
+
+      const { data: existingVariant, error: existingError } = await supabase
+        .from("product_variants")
+        .select("id, product_id")
+        .eq("id", variantId)
+        .eq("product_id", id)
+        .maybeSingle();
+
+      if (existingError) {
+        throw existingError;
+      }
+
+      if (!existingVariant) {
+        return res.status(404).json({ error: "Variante no encontrada" });
+      }
+
+      let payload;
+      try {
+        payload = normalizeVariantPayload(req.body);
+      } catch (validationError) {
+        return res.status(400).json({ error: validationError.message });
+      }
+
+      const { data, error } = await supabase
+        .from("product_variants")
+        .update(payload)
+        .eq("id", variantId)
+        .eq("product_id", id)
+        .select(
+          "id, product_id, sku, label, karat, width_mm, profile, closure_type, price, active, sort_order, metadata",
+        )
+        .maybeSingle();
+
+      if (error) {
+        if (isVariantUniqueViolation(error)) {
+          return res.status(409).json({
+            error: "Ya existe una variante con ese SKU o etiqueta",
+          });
+        }
+
+        if (isMissingCatalogColumn(error) || isMissingCatalogRelation(error)) {
+          return res.status(400).json({
+            error:
+              "Falta la tabla product_variants. Ejecuta supabase-product-variants.sql en Supabase.",
+          });
+        }
+
+        throw error;
+      }
+
+      res.json(data);
+    } catch (error) {
+      console.error("Error actualizando variante de producto:", error);
+      res.status(500).json({ error: "Error interno del servidor" });
+    }
+  });
+
+  router.delete("/products/:id/variants/:variantId", async (req, res) => {
+    try {
+      const { id, variantId } = req.params;
+
+      const { data: existingVariant, error: existingError } = await supabase
+        .from("product_variants")
+        .select("id")
+        .eq("id", variantId)
+        .eq("product_id", id)
+        .maybeSingle();
+
+      if (existingError) {
+        throw existingError;
+      }
+
+      if (!existingVariant) {
+        return res.status(404).json({ error: "Variante no encontrada" });
+      }
+
+      const { error } = await supabase
+        .from("product_variants")
+        .delete()
+        .eq("id", variantId)
+        .eq("product_id", id);
+
+      if (error) {
+        if (isMissingCatalogColumn(error) || isMissingCatalogRelation(error)) {
+          return res.status(400).json({
+            error:
+              "Falta la tabla product_variants. Ejecuta supabase-product-variants.sql en Supabase.",
+          });
+        }
+
+        throw error;
+      }
+
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error eliminando variante de producto:", error);
       res.status(500).json({ error: "Error interno del servidor" });
     }
   });
