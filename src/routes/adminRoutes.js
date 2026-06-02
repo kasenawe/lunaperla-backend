@@ -867,7 +867,7 @@ function createAdminRoutes({
   });
 
   // Endpoint para subir imagenes al bucket de productos usando service role
-  router.post("/api/upload-image", (req, res) => {
+  router.post("/upload-image", (req, res) => {
     upload.single("image")(req, res, async (uploadError) => {
       if (uploadError) {
         if (uploadError.code === "LIMIT_FILE_SIZE") {
