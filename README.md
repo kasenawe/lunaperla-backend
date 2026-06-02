@@ -214,24 +214,34 @@ Actualiza una categoría y propaga cambios de `slug`/`name` a productos y colecc
 
 Elimina una categoría si no tiene productos ni colecciones asociadas.
 
-### POST /api/upload-image
+### POST /api/upload-image-token
 
-Sube una imagen de producto a Supabase Storage usando `SUPABASE_SERVICE_ROLE_KEY`.
+Genera un token de subida (signed upload URL) para que el frontend suba la imagen directamente a Supabase Storage.
 
-- Content-Type: `multipart/form-data`
-- Campo esperado: `image`
-- Límite: 5 MB
-- Tipos permitidos: imágenes (`image/*`)
+- Content-Type: `application/json`
+- Body esperado:
+
+```json
+{
+  "filename": "alianzas.png",
+  "content_type": "image/png"
+}
+```
 
 **Response:**
 
 ```json
 {
-  "image_url": "1776975642449-alianzas.png",
-  "public_url": "https://PROJECT.supabase.co/storage/v1/object/public/products/1776975642449-alianzas.png",
-  "path": "1776975642449-alianzas.png"
+  "signed_url": "https://PROJECT.supabase.co/storage/v1/object/sign/products/....",
+  "path": "1776975642449-alianzas.png",
+  "public_url": "https://PROJECT.supabase.co/storage/v1/object/public/products/1776975642449-alianzas.png"
 }
 ```
+
+Notas:
+
+- El archivo binario no pasa por la función serverless de Vercel, evitando el error `FUNCTION_PAYLOAD_TOO_LARGE`.
+- El frontend debe hacer un `PUT` directo a `signed_url` con el archivo y luego guardar `path` en `products.image_url`.
 
 ### GET /api/collections
 
@@ -431,7 +441,7 @@ Rutas protegidas:
 - `POST /api/products`
 - `PUT /api/products/:id`
 - `DELETE /api/products/:id`
-- `POST /api/upload-image`
+- `POST /api/upload-image-token`
 - `POST /api/categories`
 - `PUT /api/categories/:slug`
 - `DELETE /api/categories/:slug`
@@ -459,7 +469,7 @@ El frontend en `../lunaperla` consume estos endpoints para el panel `/admin`:
 - `POST /api/collections`
 - `PUT /api/collections/:slug`
 - `DELETE /api/collections/:slug`
-- `POST /api/upload-image`
+- `POST /api/upload-image-token`
 
 Detalles importantes:
 
@@ -467,7 +477,7 @@ Detalles importantes:
 - El panel admin usa tres superficies separadas: productos, categorias y colecciones.
 - La base guarda en `products.image_url` solo el path del objeto en Storage, no la URL pública completa.
 - El frontend normaliza ese path usando su `VITE_SUPABASE_STORAGE_PUBLIC_BASE_URL`.
-- La subida a Storage se hace solo desde backend con `SUPABASE_SERVICE_ROLE_KEY`.
+- El backend solo firma la subida con `SUPABASE_SERVICE_ROLE_KEY`; el archivo se sube directo desde frontend a Supabase Storage.
 - El backend limpia imágenes huérfanas al fallar create/update y borra la imagen anterior al reemplazarla.
 
 ## 🚀 Despliegue a Producción
