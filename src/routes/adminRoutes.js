@@ -866,72 +866,56 @@ function createAdminRoutes({
     }
   });
 
-  // Endpoint para subir imagenes al bucket de productos usando service role
-  router.post("/upload-image", (req, res) => {
-    upload.single("image")(req, res, async (uploadError) => {
-      if (uploadError) {
-        if (uploadError.code === "LIMIT_FILE_SIZE") {
-          return res
-            .status(400)
-            .json({ error: "La imagen debe pesar menos de 5MB" });
-        }
-
-        return res.status(400).json({
-          error: uploadError.message || "Error validando archivo de imagen",
+  // Genera una URL firmada para que el cliente suba la imagen directamente a
+  // Supabase Storage. El binario nunca pasa por esta funcion de Vercel, por lo
+  // que no aplica el limite de 4.5 MB de payload de Vercel.
+  router.post("/upload-image-token", async (req, res) => {
+    try {
+      if (!supabaseAdmin) {
+        return res.status(500).json({
+          error:
+            "SUPABASE_SERVICE_ROLE_KEY no configurada en backend. No se puede subir imagen.",
         });
       }
 
-      try {
-        if (!supabaseAdmin) {
-          return res.status(500).json({
-            error:
-              "SUPABASE_SERVICE_ROLE_KEY no configurada en backend. No se puede subir imagen.",
-          });
-        }
+      const { filename, content_type } = req.body;
 
-        if (!req.file) {
-          return res
-            .status(400)
-            .json({ error: "No se recibio ningun archivo" });
-        }
-
-        const objectPath = buildStoragePath(req.file.originalname || "image");
-
-        const { error: storageError } = await supabaseAdmin.storage
-          .from(storageBucket)
-          .upload(objectPath, req.file.buffer, {
-            cacheControl: "3600",
-            upsert: false,
-            contentType: req.file.mimetype || "application/octet-stream",
-          });
-
-        if (storageError) {
-          console.error("Error subiendo imagen a Supabase:", storageError);
-          return res.status(400).json({ error: storageError.message });
-        }
-
-        const { data } = supabaseAdmin.storage
-          .from(storageBucket)
-          .getPublicUrl(objectPath);
-
-        if (!data?.publicUrl) {
-          return res
-            .status(500)
-            .json({ error: "No se pudo obtener la URL publica de la imagen" });
-        }
-
-        res.status(201).json({
-          image_url: objectPath,
-          public_url: data.publicUrl,
-          path: objectPath,
-        });
-      } catch (error) {
-        console.error("Error en upload-image:", error);
-        res.status(500).json({
-          error: error?.message || "Error interno al subir imagen",
-        });
+      if (!content_type || !String(content_type).startsWith("image/")) {
+        return res
+          .status(400)
+          .json({ error: "Solo se permiten archivos de imagen" });
       }
-    });
+
+      if (!filename || typeof filename !== "string") {
+        return res.status(400).json({ error: "Nombre de archivo requerido" });
+      }
+
+      const objectPath = buildStoragePath(filename);
+
+      const { data, error: signedUrlError } = await supabaseAdmin.storage
+        .from(storageBucket)
+        .createSignedUploadUrl(objectPath);
+
+      if (signedUrlError) {
+        console.error("Error generando signed URL:", signedUrlError);
+        return res.status(500).json({ error: signedUrlError.message });
+      }
+
+      const { data: publicData } = supabaseAdmin.storage
+        .from(storageBucket)
+        .getPublicUrl(objectPath);
+
+      res.json({
+        signed_url: data.signedUrl,
+        path: objectPath,
+        public_url: publicData?.publicUrl || null,
+      });
+    } catch (error) {
+      console.error("Error en upload-image-token:", error);
+      res.status(500).json({
+        error: error?.message || "Error interno al generar URL de subida",
+      });
+    }
   });
 
   return router;
