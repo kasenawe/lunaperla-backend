@@ -100,15 +100,10 @@ src/
 
 Ver [README-Supabase.md](README-Supabase.md) para configuración completa de base de datos, trigger `updated_at` y Storage.
 
-Si tu tabla `products` ya existe:
+Setup recomendado actual:
 
-- Ejecuta [supabase-categories-migration.sql](supabase-categories-migration.sql) para agregar `category` y `category_slug`.
-- Ejecuta [supabase-phase2-catalog.sql](supabase-phase2-catalog.sql) para:
-  - crear tabla `categories`
-  - crear tabla `collections`
-  - agregar `collection` y `collection_slug` en `products`
-  - sembrar categorias base
-  - migrar categorias existentes desde `products`
+- Ejecuta [supabase-setup.sql](supabase-setup.sql) para crear o completar todo el esquema final de catálogo y órdenes.
+- Ejecuta [supabase-seed.sql](supabase-seed.sql) solo si querés cargar productos y variantes iniciales de ejemplo.
 
 **Mercado Pago:**
 
@@ -339,13 +334,14 @@ Actualiza un producto existente.
 
 Elimina el producto y también elimina su imagen asociada del bucket, si existe.
 
-### Seed de variantes iniciales
+### Seed inicial opcional
 
-Archivo disponible: `supabase-seed-product-variants.sql`.
+Archivo disponible: `supabase-seed.sql`.
 
+- Inserta productos base de ejemplo si todavía no existen.
 - Genera variantes base para productos de `alianzas` (18K y 10K) que todavía no tengan variantes.
 - Genera variante base para productos de `bebe` sin variantes (incluye abridores/tix).
-- Es idempotente: no duplica variantes ya existentes.
+- Es idempotente: no duplica registros ya existentes.
 
 ### GET /api/orders
 
@@ -513,12 +509,10 @@ RESEND_API_KEY=re_...
 
 ### Checklist Pre-Producción
 
-- [ ] Configurar Supabase y ejecutar `supabase-schema.sql`
-- [ ] Ejecutar `supabase-categories-migration.sql` si tu tabla `products` es previa a categorias
-- [ ] Ejecutar `supabase-phase2-catalog.sql` para categorias y colecciones reales
+- [ ] Configurar Supabase y ejecutar `supabase-setup.sql`
+- [ ] Ejecutar `supabase-seed.sql` solo si querés datos iniciales de prueba
 - [ ] Crear bucket `products` en Supabase Storage
 - [ ] Configurar `SUPABASE_SERVICE_ROLE_KEY`
-- [ ] Crear trigger de `updated_at` para `products`
 - [ ] Configurar webhook en Mercado Pago (URL: `https://tu-backend/api/webhook`)
 - [ ] Establecer variables de entorno en producción
 - [ ] Probar flujo completo de pago

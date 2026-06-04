@@ -10,18 +10,17 @@ Backend Luna Gold usa Supabase como base de datos PostgreSQL y Storage para imá
 2. Crea una cuenta
 3. Crea un proyecto nuevo en la región más cercana
 
-### 2. Ejecutar migraciones SQL
+### 2. Ejecutar scripts SQL
 
-En **SQL Editor**, ejecutar en este orden:
+En **SQL Editor**, ejecutar:
 
-1. `supabase-schema.sql`
-2. `supabase-categories-migration.sql` (solo si tu tabla `products` ya existía sin categorías)
-3. `supabase-phase2-catalog.sql` (categorías y colecciones reales)
+1. `supabase-setup.sql`
+2. `supabase-seed.sql` (opcional, solo si querés datos iniciales de ejemplo)
 
-Resultado esperado:
+Resultado esperado con `supabase-setup.sql`:
 
 - tablas base: `orders`, `products`
-- catálogo fase 2: `categories`, `collections`
+- catálogo real: `categories`, `collections`
 - columnas nuevas en `products`: `category`, `category_slug`, `collection`, `collection_slug`
 - soporte de `product_code`:
   - `orders.product_code` para trazabilidad de compra
@@ -122,22 +121,22 @@ Catálogo de productos de la tienda.
 
 Variantes vendibles asociadas a un producto base.
 
-| Campo           | Tipo      | Descripción                          |
-| --------------- | --------- | ------------------------------------ |
-| `id`            | UUID      | ID único                             |
-| `product_id`    | UUID      | FK a `products.id`                   |
-| `sku`           | TEXT      | Código único de la variante          |
-| `label`         | TEXT      | Nombre visible de la variante        |
-| `karat`         | TEXT      | Kilataje / material                  |
-| `width_mm`      | DECIMAL   | Ancho en milímetros                  |
-| `profile`       | TEXT      | Perfil: bombe, doble bombe, plano... |
-| `closure_type`  | TEXT      | Tipo de cierre o montaje             |
-| `price`         | DECIMAL   | Precio final de la variante          |
-| `active`        | BOOLEAN   | Variante visible                     |
-| `sort_order`    | INTEGER   | Orden de visualización               |
-| `metadata`      | JSONB     | Datos adicionales flexibles          |
-| `created_at`    | TIMESTAMP | Fecha creación                       |
-| `updated_at`    | TIMESTAMP | Última actualización                 |
+| Campo          | Tipo      | Descripción                          |
+| -------------- | --------- | ------------------------------------ |
+| `id`           | UUID      | ID único                             |
+| `product_id`   | UUID      | FK a `products.id`                   |
+| `sku`          | TEXT      | Código único de la variante          |
+| `label`        | TEXT      | Nombre visible de la variante        |
+| `karat`        | TEXT      | Kilataje / material                  |
+| `width_mm`     | DECIMAL   | Ancho en milímetros                  |
+| `profile`      | TEXT      | Perfil: bombe, doble bombe, plano... |
+| `closure_type` | TEXT      | Tipo de cierre o montaje             |
+| `price`        | DECIMAL   | Precio final de la variante          |
+| `active`       | BOOLEAN   | Variante visible                     |
+| `sort_order`   | INTEGER   | Orden de visualización               |
+| `metadata`     | JSONB     | Datos adicionales flexibles          |
+| `created_at`   | TIMESTAMP | Fecha creación                       |
+| `updated_at`   | TIMESTAMP | Última actualización                 |
 
 Índices:
 
@@ -208,11 +207,13 @@ $$;
 
 Luego crear triggers idempotentes para:
 
+- `orders` (`update_orders_updated_at`)
 - `products` (`update_products_updated_at`)
 - `categories` (`update_categories_updated_at`)
 - `collections` (`update_collections_updated_at`)
+- `product_variants` (`update_product_variants_updated_at`)
 
-Nota: `supabase-phase2-catalog.sql` ya intenta crear triggers para `categories` y `collections` cuando la función existe.
+Nota: `supabase-setup.sql` deja creados todos esos triggers de forma automática e idempotente.
 
 ## 🔒 Seguridad
 
@@ -268,15 +269,13 @@ const { data: collections } = await supabase
 
 **Tabla o columna no existe**
 
-- ejecuta `supabase-schema.sql`
-- ejecuta `supabase-categories-migration.sql` si aplica
-- ejecuta `supabase-phase2-catalog.sql`
+- ejecuta `supabase-setup.sql`
 
 **Error de backend sobre catálogo faltante**
 
 - mensaje típico: faltan columnas o tablas del catálogo
-- causa: no se ejecutó migración fase 2
-- solución: correr `supabase-phase2-catalog.sql`
+- causa: no se ejecutó el setup completo
+- solución: correr `supabase-setup.sql`
 
 **No actualiza `updated_at`**
 
