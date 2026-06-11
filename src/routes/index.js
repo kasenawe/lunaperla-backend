@@ -6,7 +6,12 @@ const { createAuthRoutes } = require("./authRoutes");
 const requireAuth = require("../middlewares/requireAuth");
 
 function registerApiRoutes(app, deps) {
-  app.use("/api", createAuthRoutes());
+  app.use(
+    "/api",
+    createAuthRoutes({
+      supabaseAdmin: deps.supabaseAdmin,
+    }),
+  );
 
   app.use(
     "/api",
@@ -31,6 +36,7 @@ function registerApiRoutes(app, deps) {
   app.use(
     "/api",
     requireAuth,
+    requireAuth.authorize("admin"),
     createAdminRoutes({
       supabase: deps.supabase,
       slugifyValue: deps.slugifyValue,
@@ -53,6 +59,7 @@ function registerApiRoutes(app, deps) {
   app.use(
     "/api",
     requireAuth,
+    requireAuth.authorize("admin"),
     createDashboardRoutes({
       getAllOrders: deps.getAllOrders,
       getOrderById: deps.getOrderById,

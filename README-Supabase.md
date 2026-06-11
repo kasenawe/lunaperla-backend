@@ -15,7 +15,8 @@ Backend Luna Gold usa Supabase como base de datos PostgreSQL y Storage para imá
 En **SQL Editor**, ejecutar:
 
 1. `supabase-setup.sql`
-2. `supabase-seed.sql` (opcional, solo si querés datos iniciales de ejemplo)
+2. `supabase-phase1-users.sql`
+3. `supabase-seed.sql` (opcional, solo si querés datos iniciales de ejemplo)
 
 Resultado esperado con `supabase-setup.sql`:
 
@@ -29,6 +30,37 @@ Resultado esperado con `supabase-setup.sql`:
   - tabla `product_variants`
   - cada producto puede tener una o más variantes activas
   - la UI usa la variante seleccionada para precio y código final
+
+Resultado esperado con `supabase-phase1-users.sql`:
+
+- tabla `users`
+- login por `email` único
+- soporte de roles `admin` y `customer`
+- trigger `updated_at` para usuarios
+
+Si definís `INITIAL_ADMIN_EMAIL` y `INITIAL_ADMIN_PASSWORD` en el backend, el primer arranque crea un admin inicial cuando no existen admins activos.
+
+### Tabla `users`
+
+Usuarios reales del sistema.
+
+| Campo           | Tipo      | Descripción          |
+| --------------- | --------- | -------------------- |
+| `id`            | UUID      | ID único (PK)        |
+| `email`         | TEXT      | Login único          |
+| `password_hash` | TEXT      | Hash bcrypt          |
+| `first_name`    | TEXT      | Nombre               |
+| `last_name`     | TEXT      | Apellido             |
+| `phone`         | TEXT      | Teléfono             |
+| `role`          | TEXT      | `admin` o `customer` |
+| `active`        | BOOLEAN   | Usuario habilitado   |
+| `created_at`    | TIMESTAMP | Fecha creación       |
+| `updated_at`    | TIMESTAMP | Última actualización |
+
+Índices:
+
+- `idx_users_active`
+- `idx_users_role`
 
 ### 3. Obtener credenciales
 

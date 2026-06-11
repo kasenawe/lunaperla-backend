@@ -2,6 +2,15 @@
 
 API backend con integración completa: pagos, persistencia en Supabase, emails automáticos, dashboard y soporte administrativo para productos, categorias y colecciones.
 
+Autenticación actualizada en Fase 1:
+
+- usuarios reales en tabla `users`
+- login por `email` + `password`
+- password hasheada con `bcrypt`
+- JWT con `sub = user.id`
+- payload JWT con `id`, `email` y `role`
+- middleware de autenticación y autorización por rol para rutas administrativas
+
 Actualización reciente:
 
 - `products.product_code` para código interno/SKU de producto
@@ -83,18 +92,28 @@ src/
    SUPABASE_SERVICE_ROLE_KEY=tu-service-role-key
    SUPABASE_STORAGE_BUCKET=products
 
-   # Resend - Email automático (https://resend.com) - OPCIONAL
-   RESEND_API_KEY=re_...
-
-   # Puerto
-   PORT=3001
    ```
+
+# Resend - Email automático (https://resend.com) - OPCIONAL
+
+RESEND*API_KEY=re*...
+
+# Bootstrap inicial de admin (opcional, solo primera vez si la tabla users está vacía)
+
+INITIAL_ADMIN_EMAIL=admin@lunagold.com
+INITIAL_ADMIN_PASSWORD=TuPasswordSegura123!
+
+# Puerto
+
+PORT=3001
+
+````
 
 3. **Ejecutar servidor:**
-   ```bash
-   npm run dev    # Desarrollo (con nodemon)
-   npm start      # Producción
-   ```
+```bash
+npm run dev    # Desarrollo (con nodemon)
+npm start      # Producción
+````
 
 ## ⚙️ Configuración Detallada
 
@@ -103,6 +122,7 @@ Ver [README-Supabase.md](README-Supabase.md) para configuración completa de bas
 Setup recomendado actual:
 
 - Ejecuta [supabase-setup.sql](supabase-setup.sql) para crear o completar todo el esquema final de catálogo y órdenes.
+- Ejecuta [supabase-phase1-users.sql](supabase-phase1-users.sql) para habilitar usuarios reales y roles.
 - Ejecuta [supabase-seed.sql](supabase-seed.sql) solo si querés cargar productos y variantes iniciales de ejemplo.
 
 **Mercado Pago:**
@@ -402,16 +422,39 @@ Acceso en `http://localhost:3001/dashboard` (o producción)
 
 ## 🔐 Autenticación JWT (Admin)
 
+### POST /api/auth/register
+
+Registrar un usuario customer con `email`, `password`, `first_name`, `last_name` y `phone`.
+
 ### POST /api/auth/login
 
-Devuelve un `accessToken` para consumir endpoints administrativos.
+Login por `email` + `password`. Devuelve `accessToken` y el usuario autenticado.
 
 **Body:**
 
 ```json
 {
-  "username": "admin",
+  "email": "admin@lunagold.com",
   "password": "tu-password"
+}
+```
+
+### GET /api/auth/me
+
+Devuelve el usuario autenticado a partir del JWT.
+
+### PUT /api/auth/profile
+
+Actualiza perfil básico del usuario autenticado (`email`, `first_name`, `last_name`, `phone`).
+
+**Body:**
+
+```json
+{
+  "email": "admin@lunagold.com",
+  "first_name": "Luna",
+  "last_name": "Gold",
+  "phone": "099123456"
 }
 ```
 
@@ -448,6 +491,12 @@ Rutas protegidas:
 - `GET /api/orders/:orderId`
 - `GET /api/dashboard/stats`
 - `POST /api/test-email`
+
+Protección por rol:
+
+- las rutas admin requieren `role = admin`
+- las rutas de perfil requieren JWT válido
+- el acceso público de catálogo y pagos se mantiene sin cambios
 
 ## 🛍️ Integración con Panel Admin Frontend
 
@@ -500,8 +549,8 @@ SUPABASE_STORAGE_BUCKET=products
 MERCADO_PAGO_ACCESS_TOKEN=APP_USR-...
 JWT_SECRET=una-clave-larga-y-segura
 JWT_EXPIRES_IN=12h
-ADMIN_USERNAME=admin
-ADMIN_PASSWORD=cambiar-esta-password
+INITIAL_ADMIN_EMAIL=admin@lunagold.com
+INITIAL_ADMIN_PASSWORD=cambiar-esta-password
 FRONTEND_URL=https://tu-dominio.vercel.app
 BACKEND_URL=https://tu-backend.vercel.app
 RESEND_API_KEY=re_...

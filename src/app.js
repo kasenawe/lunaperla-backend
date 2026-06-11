@@ -1,11 +1,13 @@
 const express = require("express");
 const cors = require("cors");
 const multer = require("multer");
+const bcrypt = require("bcrypt");
 const {
   supabase,
   supabaseAdmin,
   storageBucket,
 } = require("./clients/supabaseClient");
+const { env } = require("./config/env");
 const { resend } = require("./clients/resendClient");
 const {
   slugifyValue,
@@ -71,6 +73,67 @@ function isMissingCatalogColumn(error) {
       .toLowerCase()
       .includes("collection")
   );
+}
+
+function isMissingUsersTable(error) {
+  return (
+    error?.code === "42P01" ||
+    String(error?.message || "")
+      .toLowerCase()
+      .includes("users")
+  );
+}
+
+async function ensureInitialAdminUser() {
+  if (
+    !supabaseAdmin ||
+    !env.INITIAL_ADMIN_EMAIL ||
+    !env.INITIAL_ADMIN_PASSWORD
+  ) {
+    return;
+  }
+
+  try {
+    const { count, error: countError } = await supabaseAdmin
+      .from("users")
+      .select("id", { count: "exact", head: true })
+      .eq("role", "admin")
+      .eq("active", true);
+
+    if (countError) {
+      if (isMissingUsersTable(countError)) {
+        return;
+      }
+
+      throw countError;
+    }
+
+    if ((count || 0) > 0) {
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(env.INITIAL_ADMIN_PASSWORD, 10);
+
+    const { error: insertError } = await supabaseAdmin.from("users").insert([
+      {
+        email: env.INITIAL_ADMIN_EMAIL.trim().toLowerCase(),
+        password_hash: passwordHash,
+        first_name: "Admin",
+        last_name: "Luna Gold",
+        phone: null,
+        role: "admin",
+        active: true,
+      },
+    ]);
+
+    if (insertError && insertError.code !== "23505") {
+      throw insertError;
+    }
+
+    console.log("✅ Usuario admin inicial preparado");
+  } catch (error) {
+    console.warn("⚠️ No se pudo preparar el usuario admin inicial:", error);
+  }
 }
 
 async function getAvailableCategoriesFallback() {
@@ -683,6 +746,8 @@ registerApiRoutes(app, {
   storageBucket,
   buildStoragePath,
 });
+
+app.ensureInitialAdminUser = ensureInitialAdminUser;
 
 app.use(createViewsRouter({ getAllOrders }));
 

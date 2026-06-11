@@ -1,7 +1,7 @@
 const jwt = require("jsonwebtoken");
 const { env } = require("../config/env");
 
-function requireAuth(req, res, next) {
+function authenticate(req, res, next) {
   if (!env.JWT_SECRET) {
     return res.status(500).json({
       error: "JWT_SECRET no configurado en el backend",
@@ -19,7 +19,12 @@ function requireAuth(req, res, next) {
 
   try {
     const payload = jwt.verify(token, env.JWT_SECRET);
-    req.user = payload;
+    req.user = {
+      id: payload.id || payload.sub,
+      email: payload.email || null,
+      role: payload.role || null,
+      sub: payload.sub || null,
+    };
     next();
   } catch (_error) {
     return res.status(401).json({
@@ -28,4 +33,25 @@ function requireAuth(req, res, next) {
   }
 }
 
-module.exports = requireAuth;
+function authorize(...allowedRoles) {
+  return (req, res, next) => {
+    if (!req.user) {
+      return res.status(401).json({
+        error: "Debes iniciar sesión",
+      });
+    }
+
+    if (allowedRoles.length > 0 && !allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({
+        error: "No tienes permisos para realizar esta acción",
+      });
+    }
+
+    return next();
+  };
+}
+
+authenticate.authenticate = authenticate;
+authenticate.authorize = authorize;
+
+module.exports = authenticate;
